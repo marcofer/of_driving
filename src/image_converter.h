@@ -65,6 +65,8 @@ private:
 
 	//check if the camera has been set before starting driving
 	bool camera_set;	
+	bool real;
+
 
 	//image processing parameters
 	int img_width, img_height;

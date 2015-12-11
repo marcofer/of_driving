@@ -1,0 +1,29 @@
+<!-- IT IS SUPPOSED THAT A V-REP SIMULATION IS RUNNING -->
+<launch> 
+  <node name="joy_node" pkg="joy" type="joy_node" />
+  <node name="keyboard" pkg="keyboard" type="keyboard" />
+  
+  <param name="image_width"       value="320"  type="int" />
+  <param name="image_height"      value="240"  type="int" />
+
+  <param name="LKpyr"             value="false" type="bool" />
+  <param name="real"             value="true" type="bool" />
+
+  <param name="maxLayer"	  value="2"    type="int" />
+  <param name="epsilon"           value="1.5"  type="double" />
+  <param name="flowResolution"    value="4"    type="int" />
+  <param name="iteration_num"     value="3"    type="int" />
+  <param name="of_iterations"     value="8"    type="int" />
+  <param name="wheelbase"         value="2.06" type="double" />
+  <param name="linear_vel"        value="0.5"  type="double" /> <!-- 0.3 -->
+  <param name="Rm"                value="1.7" type="double" />  <!-- 0.7 -->
+  <param name="img_lowpass_freq"  value="10.0" type="double" /> <!-- 10.0 -->
+  <param name="ctrl_lowpass_freq" value="5.0" type="double" /> <!-- 5.0 --> 
+  <param name="grad_scale"        value="1.0"  type="double" /> <!-- 0.3 -->
+  <param name="control"           value="true" type="bool" />
+  <param name="windows_size"      value="12"  type="int" /> <!-- 8 -->
+  <param name="simulation"        value="true" type="bool" />
+
+  <node name="of_driving_node" pkg="of_driving" type="of_driving_node" output="screen" />
+  
+</launch>

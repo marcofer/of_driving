@@ -8,6 +8,9 @@ ImageConverter::ImageConverter(): nh_(), it_(nh_){
 		ROS_INFO("Image width: %d pixel", img_width);
 	if(nh_.getParam("image_height", img_height))
 		ROS_INFO("Image height: %d pixel", img_height);
+    if(nh_.getParam("real",real))
+        ROS_INFO("real %s ", real ? "true" : "false");    
+
 
 	//Image subscriber
 	image_vrep_sub_ = it_.subscribe("/vrep/visionSensorData",1, &ImageConverter::imageCb, this);
@@ -30,7 +33,7 @@ ImageConverter::ImageConverter(): nh_(), it_(nh_){
     joy_sub_ = nh_.subscribe<sensor_msgs::Joy>("/joy", 1, &ImageConverter::msgCb, this);
 
 	//Sampling time
-	double Tc = 1.0/60.0; //camera frame rate, but the value is not certain
+	double Tc = 1.0/20.0; //camera frame rate, but the value is not certain
 
 	//Initialization
 	tilt_cmd = 0.0;
@@ -103,8 +106,14 @@ void ImageConverter::rawImageCb(const sensor_msgs::ImageConstPtr& msg){
 	image.copyTo(prev_image);
 	cv_ptr->image.copyTo(image);
 
+
+	if(!image.empty())
+		cout << "Showing image ... " << endl;
+	cvtColor(image,image,CV_BGR2GRAY);
+	imshow("Test",cv_ptr->image);
+
 	//run the main algorithm
-	run_algorithm(image,prev_image);
+	//run_algorithm(image,prev_image);
 
 
 }
@@ -161,22 +170,28 @@ void ImageConverter::run_algorithm(Mat& img, Mat& prev_img){
 	float beta = -1;
 	float alpha = 0.0;
 
-	if(!camera_set && !image.empty()){
-		camera_set = drive.setPanTilt(key,tilt_cmd,pan_cmd);
-		drive.plotPanTiltInfo(info_image,tilt_cmd,pan_cmd);
-		head_tilt = drive.get_tilt();
-		head_pan = drive.get_pan();
-		drive.set_tilt(-head_tilt);
-		imshow("camera image",info_image);
+	if(!real){
+		if(!camera_set && !image.empty()){
+			camera_set = drive.setPanTilt(key,tilt_cmd,pan_cmd);
+			drive.plotPanTiltInfo(info_image,tilt_cmd,pan_cmd);
+			head_tilt = drive.get_tilt();
+			head_pan = drive.get_pan();
+			drive.set_tilt(-head_tilt);
+			imshow("camera image",info_image);
+		}
+		else{
+			cvDestroyWindow("camera image");
+			drive.run(img,prev_img,accelerate_cmd,steer_cmd);
+	        drive.plotPanTiltInfo(info_image,tilt_cmd,pan_cmd);
+	        alpha = drive.get_steering();
+	        beta = drive.get_throttle();
+	        head_tilt = drive.get_tilt();
+	        head_pan = drive.get_pan();
+		}
 	}
 	else{
-		cvDestroyWindow("camera image");
-		drive.run(img,prev_img,accelerate_cmd,steer_cmd);
-        drive.plotPanTiltInfo(info_image,tilt_cmd,pan_cmd);
-        alpha = drive.get_steering();
-        beta = drive.get_throttle();
-        head_tilt = drive.get_tilt();
-        head_pan = drive.get_pan();
+		cout << "Entering in drive.run " << endl;
+		drive.run(img,prev_img,accelerate_cmd,steer_cmd);		
 	}
 
 	key = cvWaitKey(1)%256;

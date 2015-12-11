@@ -90,7 +90,6 @@ void of_driving::initFlows(){
 	point_counter = 0;
 	best_counter = 0;
 	max_counter = img_height*img_width/2;
-	cout << "max counter: " << max_counter << endl;
 }
 
 
@@ -172,12 +171,14 @@ void of_driving::plotPanTiltInfo(Mat& img, float tilt_cmd, float pan_cmd){
 
 void of_driving::run(Mat& img, Mat& prev_img, double acc, double steer){
 
+
 	vector<Mat> pyr, prev_pyr, u_pyr;
 	int k = 0;
 	best_counter = 0;
 	
 	cvtColor(img,GrayImg,CV_BGR2GRAY);
 	cvtColor(prev_img,GrayPrevImg,CV_BGR2GRAY);
+
 
 	/*Size GaussSize(3,3);
 	double sigmaX = 1.2;
@@ -323,7 +324,7 @@ void of_driving::computeOpticalFlowField(Mat& prevImg, Mat& img){
     else{ // DENSE - FARNEBACK
     	calcOpticalFlowFarneback(prevImg, img, optical_flow, pyr_scale, maxLayer, winsize, of_iterations, poly_n, poly_sigma, flags);		
 
-    	for (int i = 0 ; i < optical_flow.rows ; i ++){
+    	/*for (int i = 0 ; i < optical_flow.rows ; i ++){
     		for (int j = 0 ; j < optical_flow.cols ; j ++){
     			Point2f p(optical_flow.at<Point2f>(i,j));
     			if (isnan(p.x) || isnan(p.y)){
@@ -331,7 +332,7 @@ void of_driving::computeOpticalFlowField(Mat& prevImg, Mat& img){
     				optical_flow.at<Point2f>(i,j) = Point2f(0,0);
     			}
     		}
-    	}
+    	}//*/
    }
 
    /*** LOW PASS FILTERING ***/
@@ -442,8 +443,6 @@ void of_driving::buildDominantPlane(){
 	dilate(dominant_plane, dominant_plane, getStructuringElement(MORPH_ELLIPSE, Size(edsize/2,edsize/2)));//*/
 
 
-	//GaussianBlur(dominant_plane,smoothed_plane,GaussSize,sigmaX);
-	//smoothed_plane = Mat::ones(img_height,img_width,CV_8UC1);
 	unsigned char* dpPtr = (unsigned char*)(dominant_plane.data);
 	unsigned char* oldPtr = (unsigned char*)(old_plane.data);
 	for (int i = 0 ; i < img_height ; i ++){
@@ -459,93 +458,6 @@ void of_driving::buildDominantPlane(){
 	double maxVal = 255;
 	threshold(dominant_plane,dominant_plane,thresh,maxVal,THRESH_BINARY);//*/
 
-	//dilate(dominant_plane,dominant_plane,getStructuringElement(MORPH_RECT,Size(edsize/2,edsize/2)));
-	//erode(dominant_plane,dominant_plane,getStructuringElement(MORPH_RECT,Size(edsize/4,edsize/4)));
-
-	// Morphological opening (remove small objects from the foreground) ---> erode + dilate
-	// Morphological closing (fill small holes in the foreground) ---> dilate + erode
-
-    //dilate(dominant_plane, dominant_plane, getStructuringElement(MORPH_ELLIPSE, Size(edsize,edsize)));
-    //erode(dominant_plane, dominant_plane, getStructuringElement(MORPH_RECT, Size(edsize/2,edsize/2)));
-	/*dilate(dominant_plane, dominant_plane, getStructuringElement(MORPH_ELLIPSE, Size(edsize,edsize)));
-    erode(dominant_plane, dominant_plane, getStructuringElement(MORPH_ELLIPSE, Size(edsize,edsize)));//*/
-
-    /*Mat dst;
-    vector<vector<cv::Point>> contours;
-    vector<Vec4i> hierarchy;
-
-    Mat temp, inverse;
-    dominant_plane.copyTo(temp);
-    bitwise_not(temp,inverse);
-
-    imshow("inverse",inverse);
-    findContours(inverse,contours,hierarchy,CV_RETR_TREE,CV_CHAIN_APPROX_NONE);
-    RNG rng(12345);
-
-	/// Draw contours
-	Mat drawing = Mat::zeros( temp.size(), CV_8UC3 );
-	for( int i = 0; i< contours.size(); i++ )
-	{
-		Scalar color = Scalar( 255,255,255 );
-	    drawContours( drawing, contours, i, color, 2, 8, hierarchy, 0, Point() );
-	}
-	dilate(drawing, drawing, getStructuringElement(MORPH_ELLIPSE, Size(edsize,edsize)));
-    erode(drawing, drawing, getStructuringElement(MORPH_ELLIPSE, Size(2*edsize,2*edsize)));
-    bitwise_not(drawing,drawing);
-	imshow("contours",drawing);//*/
-
-
-
-    /*Mat img_ths, mask;
-    threshold(dominant_plane,img_ths,125,255,THRESH_BINARY);
-    img_ths.copyTo(mask);
-
-	for (int i = 0; i < mask.cols; i++) {
-	    if (mask.at<char>(0, i) == 0) {
-	        cv::floodFill(mask, cv::Point(i, 0), 255, 0, 10, 10);
-	    }   
-	    if (mask.at<char>(mask.rows-1, i) == 0) {
-	        cv::floodFill(mask, cv::Point(i, mask.rows-1), 255, 0, 10, 10);
-	    }
-	}
-	for (int i = 0; i < mask.rows; i++) {
-	    if (mask.at<char>(i, 0) == 0) {
-	        cv::floodFill(mask, cv::Point(0, i), 255, 0, 10, 10);
-	    }
-	    if (mask.at<char>(i, mask.cols-1) == 0) {
-	        cv::floodFill(mask, cv::Point(mask.cols-1, i), 255, 0, 10, 10);
-	    }
-	}
-	
-	cv::Mat newImage;
-	dominant_plane.copyTo(newImage);
-	for (int row = 0; row < mask.rows; ++row) {
-	    for (int col = 0; col < mask.cols; ++col) {
-	        if (mask.at<char>(row, col) == 0) {
-	            newImage.at<char>(row, col) = 255;
-	        }           
-	    }
-	}//*/
-
-	//imshow("New image", newImage);
-
-    /*Mat temp;
-    vector<vector<Point> > contours;
-    vector<Vec4i> hierarchy; 
-    dominant_plane.copyTo(temp);
-    int canny_ths = 200;
-    Canny(dominant_plane,temp,canny_ths, canny_ths*2, 3);
-    findContours(temp,contours,hierarchy,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE);
-
-	Mat drawing = Mat::zeros( temp.size(), CV_8UC3 );
-	for( int i = 0; i< contours.size(); i++ ){
-		drawContours( dominant_plane, contours, i, Scalar(0,0,255), -1);
-	}
-
-	//imshow("drawing", drawing);//*/
-
-
-	//dominant_plane.copyTo(old_plane);//*/
 
     for (int i = 0 ; i < img_height ; i ++){
     	for (int j = 0 ; j < img_width ; j ++){
