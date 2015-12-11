@@ -180,11 +180,6 @@ void of_driving::run(Mat& img, Mat& prev_img, double acc, double steer){
 	cvtColor(prev_img,GrayPrevImg,CV_BGR2GRAY);
 
 
-	/*Size GaussSize(3,3);
-	double sigmaX = 1.2;
-	GaussianBlur(GrayImg,GrayImg,GaussSize,sigmaX);
-	GaussianBlur(GrayPrevImg,GrayPrevImg,GaussSize,sigmaX);//*/
-
 	/// ---  1. Compute the optical flow field u(x,y,t) at layer l (output: optical_flow matrix)
 	computeOpticalFlowField(GrayPrevImg,GrayImg);
 
@@ -238,7 +233,7 @@ void of_driving::run(Mat& img, Mat& prev_img, double acc, double steer){
 	//*/
     /// --- END. Show the intermediate steps
 	displayImages(prev_img);//*/
-
+    cvWaitKey(1);
 
 }
 

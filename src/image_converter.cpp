@@ -47,6 +47,9 @@ ImageConverter::ImageConverter(): nh_(), it_(nh_){
     drive.set_imgSize(img_width,img_height);
     drive.initFlows();
 
+
+    image = Mat::zeros(img_height,img_width,CV_8UC3);
+    prev_image = Mat::zeros(img_height,img_width,CV_8UC3);
 }
 
 ImageConverter::~ImageConverter(){
@@ -107,13 +110,11 @@ void ImageConverter::rawImageCb(const sensor_msgs::ImageConstPtr& msg){
 	cv_ptr->image.copyTo(image);
 
 
-	if(!image.empty())
-		cout << "Showing image ... " << endl;
-	cvtColor(image,image,CV_BGR2GRAY);
-	imshow("Test",cv_ptr->image);
-
+	//cvtColor(image,image,CV_BGR2GRAY);
+	//imshow("Test",cv_ptr->image);
+	//cvWaitKey(1);
 	//run the main algorithm
-	//run_algorithm(image,prev_image);
+	run_algorithm(image,prev_image);
 
 
 }
@@ -190,7 +191,6 @@ void ImageConverter::run_algorithm(Mat& img, Mat& prev_img){
 		}
 	}
 	else{
-		cout << "Entering in drive.run " << endl;
 		drive.run(img,prev_img,accelerate_cmd,steer_cmd);		
 	}
 
