@@ -6,8 +6,11 @@
   <param name="image_width"       value="320"  type="int" />
   <param name="image_height"      value="240"  type="int" />
 
-  <param name="LKpyr"             value="false" type="bool" />
   <param name="real"             value="true" type="bool" />
+
+  <param name="LKpyr"             value="false" type="bool" />
+  <param name="windows_size"      value="21"  type="int" /> <!-- 8 -->
+  <param name="publishing_rate"   value="20.0" type="double" />
 
   <param name="maxLayer"	  value="2"    type="int" />
   <param name="epsilon"           value="1.5"  type="double" />
@@ -21,9 +24,10 @@
   <param name="ctrl_lowpass_freq" value="5.0" type="double" /> <!-- 5.0 --> 
   <param name="grad_scale"        value="1.0"  type="double" /> <!-- 0.3 -->
   <param name="control"           value="true" type="bool" />
-  <param name="windows_size"      value="8"  type="int" /> <!-- 8 -->
+
   <param name="simulation"        value="true" type="bool" />
 
   <node name="of_driving_node" pkg="of_driving" type="of_driving_node" output="screen" />
-  
+  <node name="video_publisher_node" pkg="rawVideoPub" type="video_publisher_node" output="screen" />  
+
 </launch>
