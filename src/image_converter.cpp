@@ -10,11 +10,22 @@ ImageConverter::ImageConverter(): nh_(), it_(nh_){
 		ROS_INFO("Image height: %d pixel", img_height);
     if(nh_.getParam("real",real))
         ROS_INFO("real %s ", real ? "true" : "false");    
+    if(nh_.getParam("NAOimg",NAOimg))
+        ROS_INFO("NAOimg %s ", NAOimg ? "true" : "false");    
 
+
+    string raw_src_topic;
+
+    if(!NAOimg){
+    	raw_src_topic = "/raw_images";
+    }
+    else{
+    	raw_src_topic = "/nao_robot/camera/bottom/camera/image_raw";
+    }
 
 	//Image subscriber
 	image_vrep_sub_ = it_.subscribe("/vrep/visionSensorData",1, &ImageConverter::imageCb, this);
-	raw_image_sub = it_.subscribe("/raw_images",1,&ImageConverter::rawImageCb, this);
+	raw_image_sub = it_.subscribe(raw_src_topic,1,&ImageConverter::rawImageCb, this);
 
 	//Subscribe to keyboard inputs
 	keyDown_sub_ = nh_.subscribe<keyboard::Key>("/keyboard/keydown",1, &ImageConverter::msgKeyDown, this);

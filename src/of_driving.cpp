@@ -34,6 +34,10 @@ of_driving::of_driving(): nh_(){
         ROS_INFO("wheelbase set to %f ", wheelbase);    
     if(nh_.getParam("simulation",simulation))
         ROS_INFO("simulation %s ", simulation ? "true" : "false");    
+    if(nh_.getParam("save_video",save_video))
+        ROS_INFO("save_video %s ", save_video ? "true" : "false");    
+    if(nh_.getParam("fake_corners",fake_corners))
+        ROS_INFO("fake_corners %s ", fake_corners ? "true" : "false");    
 
 
     setTc(0.05); //20Hz
@@ -90,6 +94,15 @@ void of_driving::initFlows(){
 	point_counter = 0;
 	best_counter = 0;
 	max_counter = img_height*img_width/2;
+
+
+	if(save_video){
+		record.open("NAOcamera.avi", CV_FOURCC('D','I','V','X'), 1.0/Tc, cvSize(img_width,img_height), true);
+		if( !record.isOpened() ) {
+			cout << "[NAO] VideoWriter failed to open!" << endl;
+			}
+	}
+
 }
 
 
@@ -175,7 +188,11 @@ void of_driving::run(Mat& img, Mat& prev_img, double acc, double steer){
 	vector<Mat> pyr, prev_pyr, u_pyr;
 	int k = 0;
 	best_counter = 0;
-	
+
+	if(save_video){
+		record.write(img);
+	}
+
 	cvtColor(img,GrayImg,CV_BGR2GRAY);
 	cvtColor(prev_img,GrayPrevImg,CV_BGR2GRAY);
 
@@ -217,7 +234,9 @@ void of_driving::run(Mat& img, Mat& prev_img, double acc, double steer){
     /// --- 4. Match the computed optical flow and esitmated planar flow, so detect the dominant plane
     buildDominantPlane();
 
-    fakeBlackSpot();
+    if(fake_corners){
+    	fakeBlackSpot();
+    }
 
     /// --- 5. Compute gradient vector field from dominant plane 
     computeGradientVectorField();

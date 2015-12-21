@@ -168,6 +168,14 @@ private:
 	//Vehicle wheelbase
 	double wheelbase;
 
+
+	/** Variable used for video recording **/
+	VideoWriter record;
+	bool save_video;
+
+	//flag to activate fake black corners
+	bool fake_corners;
+
 	/* Methods */
 	void computeOpticalFlowField(Mat&, Mat&);
 

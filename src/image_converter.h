@@ -66,6 +66,7 @@ private:
 	//check if the camera has been set before starting driving
 	bool camera_set;	
 	bool real;
+	bool NAOimg;
 
 
 	//image processing parameters

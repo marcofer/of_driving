@@ -6,8 +6,10 @@
   <param name="image_width"       value="320"  type="int" />
   <param name="image_height"      value="240"  type="int" />
 
-  <param name="LKpyr"             value="true" type="bool" />
+  <param name="LKpyr"             value="false" type="bool" />
   <param name="real"             value="false" type="bool" />
+  <param name="NAOimg"            value="false" type="bool" />
+  <param name="save_video"	  value="false" type="bool" />
 
   <param name="maxLayer"	  value="2"    type="int" />
   <param name="epsilon"           value="1.5"  type="double" />
@@ -23,6 +25,7 @@
   <param name="control"           value="true" type="bool" />
   <param name="windows_size"      value="8"  type="int" /> <!-- 8 -->
   <param name="simulation"        value="true" type="bool" />
+  <param name="fake_corners"      value="true" type="bool" />
 
   <node name="of_driving_node" pkg="of_driving" type="of_driving_node" output="screen" />
   
