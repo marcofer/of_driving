@@ -111,6 +111,10 @@ private:
 	//gradient scale factor
 	double grad_scale;
 
+	//erode/dilate scale factor
+	double erode_factor;
+	double dilate_factor;
+
 	//optical flow field
 	Mat optical_flow, old_flow;
 	vector<Mat> of_pyramid;

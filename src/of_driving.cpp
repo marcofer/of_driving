@@ -38,7 +38,10 @@ of_driving::of_driving(): nh_(){
         ROS_INFO("save_video %s ", save_video ? "true" : "false");    
     if(nh_.getParam("fake_corners",fake_corners))
         ROS_INFO("fake_corners %s ", fake_corners ? "true" : "false");    
-
+    if(nh_.getParam("erode_factor",erode_factor))
+        ROS_INFO("erode_factor set to %f ", erode_factor);    
+    if(nh_.getParam("dilate_factor",dilate_factor))
+        ROS_INFO("dilate_factor set to %f ", dilate_factor); 
 
     setTc(0.05); //20Hz
 
@@ -97,7 +100,7 @@ void of_driving::initFlows(){
 
 
 	if(save_video){
-		record.open("NAOcamera.avi", CV_FOURCC('D','I','V','X'), 1.0/Tc, cvSize(img_width,img_height), true);
+		record.open("NAOcamera.avi", CV_FOURCC('D','I','V','X'),20.0, cvSize(img_width,img_height), true);
 		if( !record.isOpened() ) {
 			cout << "[NAO] VideoWriter failed to open!" << endl;
 			}
@@ -453,10 +456,13 @@ void of_driving::buildDominantPlane(){
 	}
 
 
-	erode(dominant_plane, dominant_plane, getStructuringElement(MORPH_ELLIPSE, Size(edsize/4,edsize/4)));//*/
-	dilate(dominant_plane, dominant_plane, getStructuringElement(MORPH_ELLIPSE, Size(edsize/2,edsize/2)));//*/
+	erode(dominant_plane, dominant_plane, getStructuringElement(MORPH_ELLIPSE, Size(erode_factor,erode_factor)));//*/
+	dilate(dominant_plane, dominant_plane, getStructuringElement(MORPH_ELLIPSE, Size(dilate_factor,dilate_factor)));//*/
 
-
+	//test for books images
+	//dilate(dominant_plane, dominant_plane, getStructuringElement(MORPH_ELLIPSE, Size(dilate_factor,dilate_factor)));//*/
+	//erode(dominant_plane, dominant_plane, getStructuringElement(MORPH_ELLIPSE, Size(erode_factor,erode_factor)));//*/
+	
 	unsigned char* dpPtr = (unsigned char*)(dominant_plane.data);
 	unsigned char* oldPtr = (unsigned char*)(old_plane.data);
 	for (int i = 0 ; i < img_height ; i ++){
