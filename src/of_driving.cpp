@@ -50,13 +50,11 @@ of_driving::of_driving(): nh_(){
 	py_old = 0.0;
 
 	steering = 0.0;
-	ctrl_steering = 0.0;
 	ankle_angle = 0.0;
 	pan_angle = 0.0;
 	tilt_angle = 0.0;
 
 	camera_set = false;
-
 
 	A = Matx22f(1,0,0,1);
 	b = Matx21f(0,0);
@@ -69,9 +67,6 @@ of_driving::of_driving(): nh_(){
 	theta_pub = nh_.advertise<std_msgs::Float64>("/theta",1);
 	norm_pub = nh_.advertise<std_msgs::Float64>("/norm",1);
 	steering_pub = nh_.advertise<std_msgs::Float64>("/steering",1);
-	ctrlsteering_pub = nh_.advertise<std_msgs::Float64>("/ctrl_steering",1);
-
-
 }
 
 of_driving::~of_driving(){
@@ -353,12 +348,16 @@ void of_driving::computeOpticalFlowField(Mat& prevImg, Mat& img){
    }
 
    /*** LOW PASS FILTERING ***/
-	/*for (int i = 0 ; i < optical_flow.rows ; i ++){
+   	double cutf = 15.0;
+	for (int i = 0 ; i < optical_flow.rows ; i ++){
 		for (int j = 0 ; j < optical_flow.cols ; j ++){
 			Point2f p(optical_flow.at<Point2f>(i,j));
 			Point2f oldp(old_flow.at<Point2f>(i,j));
 			optical_flow.at<Point2f>(i,j).x = low_pass_filter(p.x,oldp.x,Tc,1.0/img_lowpass_freq);
 			optical_flow.at<Point2f>(i,j).y = low_pass_filter(p.y,oldp.y,Tc,1.0/img_lowpass_freq);
+			//optical_flow.at<Point2f>(i,j).x = low_pass_filter(p.x,oldp.x,Tc,1.0/cutf);
+			//optical_flow.at<Point2f>(i,j).y = low_pass_filter(p.y,oldp.y,Tc,1.0/cutf);
+
 		}
 	}
 
@@ -611,24 +610,12 @@ void of_driving::computeRobotVelocities(double acc, double steer){
 	//R = low_pass_filter(R,Rold,Tc,1.0/ctrl_lowpass_freq);
 	//Rold = R;
 
-	if(control){
-		if(ankle_angle != -1){
-	        steering = wheelbase * R/linear_vel;
-	    }
-	    else{
-	        steering = 0.0;
-	    }
-	}
-	else{
-		if(ankle_angle != -1){
-			ctrl_steering = wheelbase * R/linear_vel;
-		}
-		else{
-			ctrl_steering = 0.0;
-		}
-		double steering_max = 0.9*CV_PI;
-		steering = steer * steering_max;
-	}//*/
+	if(ankle_angle != -1){
+        steering = wheelbase * R/linear_vel;
+    }
+    else{
+        steering = 0.0;
+    }
 
 	//ankle_angle = acc - 1.0;
 	ankle_angle = 0.0;
@@ -636,9 +623,6 @@ void of_driving::computeRobotVelocities(double acc, double steer){
 	std_msgs::Float64 steer_msg;
 	steer_msg.data = steering;
 	steering_pub.publish(steer_msg);
-	std_msgs::Float64 ctrlsteer_msg;
-	ctrlsteer_msg.data = ctrl_steering;
-	ctrlsteering_pub.publish(ctrlsteer_msg);
 }
 
 

@@ -23,8 +23,8 @@
   <param name="img_lowpass_freq"  value="10.0"  type="double" /> <!-- 10.0 -->
   <param name="ctrl_lowpass_freq" value="5.0"   type="double" /> <!-- 5.0 --> 
   <param name="grad_scale"        value="1.0"   type="double" /> <!-- 0.3 -->
-  <param name="erode_factor"	  value="2.5"   type="double" /> <!-- 10.0 -->
-  <param name="dilate_factor"	  value="5"     type="double" /> <!-- 10.0 -->
+  <param name="erode_factor"	  value="2.5"   type="double" /> <!-- 2.5 -->
+  <param name="dilate_factor"	  value="5"     type="double" /> <!-- 5.0 -->
   <param name="control"           value="true"  type="bool"   />
   <param name="windows_size"      value="8"     type="int"    /> <!-- 8 -->
   <param name="simulation"        value="true"  type="bool"   />

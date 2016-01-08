@@ -27,7 +27,7 @@ class of_driving{
 	
 	ros::NodeHandle nh_;
 
-	ros::Publisher theta_pub, norm_pub, steering_pub, ctrlsteering_pub;
+	ros::Publisher theta_pub, norm_pub, steering_pub;
 
 public:
 	//Constructor
@@ -93,7 +93,7 @@ private:
 	double img_lowpass_freq, ctrl_lowpass_freq;
 
 	//Car control variables
-	double steering, ctrl_steering;
+	double steering;
 	double ankle_angle;
 	double tilt_angle;
 	double pan_angle;
