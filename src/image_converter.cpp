@@ -1,5 +1,7 @@
 #include "image_converter.h"
 
+#include <ros/transport_hints.h>
+
 
 ImageConverter::ImageConverter(): nh_(), it_(nh_){
 	key = 0;
@@ -13,7 +15,6 @@ ImageConverter::ImageConverter(): nh_(), it_(nh_){
     if(nh_.getParam("NAOimg",NAOimg))
         ROS_INFO("NAOimg %s ", NAOimg ? "true" : "false");    
 
-
     string raw_src_topic;
 
     if(!NAOimg){
@@ -24,43 +25,39 @@ ImageConverter::ImageConverter(): nh_(), it_(nh_){
     }
 
 	//Image subscriber
-	image_vrep_sub_ = it_.subscribe("/vrep/visionSensorData",1, &ImageConverter::imageCb, this);
+	image_vrep_sub_ = it_.subscribe("/vrep/visionSensorData",1, &ImageConverter::imageCb, this, image_transport::TransportHints("raw",ros::TransportHints().tcpNoDelay()));
 	raw_image_sub = it_.subscribe(raw_src_topic,1,&ImageConverter::rawImageCb, this);
 
 	//Subscribe to keyboard inputs
 	keyDown_sub_ = nh_.subscribe<keyboard::Key>("/keyboard/keydown",1, &ImageConverter::msgKeyDown, this);
 	keyUp_sub_ = nh_.subscribe<keyboard::Key>("/keyboard/keyup",1, &ImageConverter::msgKeyUp, this);
 
-	//Initialize time instant 
-	t0 = 0.0;
+	/// Subscribe to joystick inputs
+    joy_sub_ = nh_.subscribe<sensor_msgs::Joy>("/joy", 1, &ImageConverter::msgCb, this);
 
 	//Publishers
 	tilt_pub_ = nh_.advertise<std_msgs::Float64>("/tilt",1);
 	pan_pub_ = nh_.advertise<std_msgs::Float64>("/pan",1);
 	alpha_pub_ = nh_.advertise<std_msgs::Float64>("/alpha",1);
 	beta_pub_ = nh_.advertise<std_msgs::Float64>("/beta",1);
-
-	/// Subscribe to joystick inputs
-    joy_sub_ = nh_.subscribe<sensor_msgs::Joy>("/joy", 1, &ImageConverter::msgCb, this);
-
-	//Sampling time
-	double Tc = 1.0/20.0; //camera frame rate, but the value is not certain
+	hz_pub = nh_.advertise<std_msgs::Float64>("/hz",1);
 
 	//Initialization
 	tilt_cmd = 0.0;
 	pan_cmd = 0.0;
 	accelerate_cmd = 0.0;
 	steer_cmd = 0.0;
-
 	camera_set = false;
-
 
     drive.set_imgSize(img_width,img_height);
     drive.initFlows();
 
-
     image = Mat::zeros(img_height,img_width,CV_8UC3);
     prev_image = Mat::zeros(img_height,img_width,CV_8UC3);
+
+    gettimeofday(&start_tod,NULL);
+    elapsed_tod = 0.0;
+
 }
 
 ImageConverter::~ImageConverter(){
@@ -98,11 +95,16 @@ void ImageConverter::imageCb(const sensor_msgs::ImageConstPtr& msg){
 	//run the main algorithm
 	run_algorithm(image,prev_image);
 
+    gettimeofday(&end_tod,NULL);
+    elapsed_tod = (end_tod.tv_sec + (double)end_tod.tv_usec /1000000.0)
+		  - (start_tod.tv_sec + (double)start_tod.tv_usec/1000000.0);
+	start_tod = end_tod;
 
-	/*float t = msg->header.stamp.nsec;
-	cout << "elapsed time between two image messages: " << (t - t0)*1e-9 << endl;
-	cout << "image frame rate: " << 1.0/((t - t0)*1e-9) << endl;
-	t0 = t;//*/
+	//cout << "time: " << elapsed_tod << "s" << endl;
+	//cout << "frequency: " << 1.0/elapsed_tod << "Hz" << endl << endl;
+
+	double cutoff_f = 1.0/elapsed_tod*0.25;
+
 
 }
 
@@ -120,14 +122,31 @@ void ImageConverter::rawImageCb(const sensor_msgs::ImageConstPtr& msg){
 	image.copyTo(prev_image);
 	cv_ptr->image.copyTo(image);
 
-
 	//cvtColor(image,image,CV_BGR2GRAY);
 	//imshow("Test",cv_ptr->image);
 	//cvWaitKey(1);
 	//run the main algorithm
+
+    gettimeofday(&end_tod,NULL);
+
+    elapsed_tod = (end_tod.tv_sec + (double)end_tod.tv_usec /1000000.0)
+		  - (start_tod.tv_sec + (double)start_tod.tv_usec/1000000.0);
+
+	start_tod = end_tod;
+	double cutoff_f = 1.0/elapsed_tod*0.25;
+
+	std_msgs::Float64 hz_msg;
+	hz_msg.data = 1.0/elapsed_tod;
+	hz_pub.publish(hz_msg);
+	/*cout << "[image_converter] elapsed_tod: " << elapsed_tod << endl;
+	cout << "[image_converter] freq_tod: " << 1.0/elapsed_tod << endl << endl;//*/
+
+	//cout << "Tc: " << sampling_time << "---> frequency: " << 1.0/sampling_time << endl;
+	//cout << "cut off f: " << cutoff_f << endl << endl;
+	drive.setTc(elapsed_tod);
+	drive.setLowPassFrequency(cutoff_f);
+
 	run_algorithm(image,prev_image);
-
-
 }
 
 
@@ -186,6 +205,8 @@ void ImageConverter::run_algorithm(Mat& img, Mat& prev_img){
 		if(!camera_set && !image.empty()){
 			camera_set = drive.setPanTilt(key,tilt_cmd,pan_cmd);
 			drive.plotPanTiltInfo(info_image,tilt_cmd,pan_cmd);
+			drive.setTc(0.05);
+			drive.setLowPassFrequency(10.0);
 			head_tilt = drive.get_tilt();
 			head_pan = drive.get_pan();
 			drive.set_tilt(-head_tilt);
@@ -193,7 +214,7 @@ void ImageConverter::run_algorithm(Mat& img, Mat& prev_img){
 		}
 		else{
 			cvDestroyWindow("camera image");
-			drive.run(img,prev_img,accelerate_cmd,steer_cmd);
+			drive.run(img,prev_img,accelerate_cmd,steer_cmd,real);
 	        drive.plotPanTiltInfo(info_image,tilt_cmd,pan_cmd);
 	        alpha = drive.get_steering();
 	        beta = drive.get_throttle();
@@ -202,7 +223,7 @@ void ImageConverter::run_algorithm(Mat& img, Mat& prev_img){
 		}
 	}
 	else{
-		drive.run(img,prev_img,accelerate_cmd,steer_cmd);		
+		drive.run(img,prev_img,accelerate_cmd,steer_cmd,real);	
 	}
 
 	key = cvWaitKey(1)%256;

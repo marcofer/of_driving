@@ -1,0 +1,66 @@
+<launch> 
+
+  <!-- Path of the input video file -->  
+	<arg   name = "filename"        default="$(find of_driving)/video/NAOcamera.avi"   /> 
+  
+  <!-- Flag establishing if raw images have been taken or not --> 
+  	<arg   name="LOGGED"	        default="false"			                   /> 
+ 
+ 
+  <!-- Required images size -->
+  	<param name="image_width"       value="320"   type="int"    			   />
+  	<param name="image_height"      value="240"   type="int"    			   />
+
+  <!-- FLAGS --> 
+  <!-- If multi-threading is enables -->
+	<param name="multithread"       value="true"  type="bool"                          />
+  <!-- Implementation Method for Optical Flow ( 0 = Sparse Lucas-Kanade ; 1 = Dense Farneback ; 2 = GPU Sparse Lucas-Kanade ; 3 = GPU Dense Farneback ; 4 = GPU Dense Brox ) -->
+	<param name="of_alg"            value="3"     type="int"                           />
+  <!-- If working with real images -->  
+	<param name="real"              value="true"  type="bool"                          /> 
+  <!-- If source camera is NAO's -->
+	<param name="NAOimg"            value="false" type="bool"   			   /> 
+  <!-- If camera images have to be stored -->
+	<param name="save_video"	value="false" type="bool" 			   /> 
+  <!-- If fake corners are used -->	
+	<param name="fake_corners"      value="false" type="bool"                          />
+
+  <!-- Window size for Optical Flow function -->
+	<param name="windows_size"      value="8"     type="int"                           /> <!-- 8 -->
+  <!-- number of pyramid levels for Optical Flow function -->
+	<param name="maxLayer"	        value="2"     type="int"                           />
+  <!-- number of iterations performed by the Optical Flow function -->
+	<param name="of_iterations"     value="8"     type="int"                           /> <!-- 2 -->
+  <!-- Scale factor for the Optical Flow field -->
+	<param name="of_scale"          value="4"     type="int"                           />
+
+  <!-- RANSAC threshold for inliers selection -->
+	<param name="epsilon"           value="1.5"   type="double"                        /> <!-- 1.5 -->
+  <!-- RANSAC iterations -->
+	<param name="iteration_num"     value="10"    type="int"                           />
+
+  <!-- Resolution of displayed flows for visualization -->
+	<param name="flowResolution"    value="4"     type="int"                           />
+  <!-- erosion factor for morphological opening/closure of dominant plane image -->
+	<param name="erode_factor"      value="2.5"   type="double"                        /> <!--2.5 -->
+  <!-- dilate factor for morphological opening/closure of dominant plane image -->
+	<param name="dilate_factor"	value="5.0"   type="double"                        /> <!-- 5.0 -->
+  <!-- scale factor for gradient field computation -->
+	<param name="grad_scale"        value="1.0"   type="double"                        /> <!-- 0.3 -->
+  <!-- Maximum commanded angular velocity -->
+	<param name="Rm"                value="1.7"   type="double"                        />  <!-- 0.7 -->
+
+  <!-- Launch joypad and keyboard nodes -->
+	<node name="joy_node"           pkg="joy"         type="joy_node"                             />
+	<node name="keyboard"           pkg="keyboard"    type="keyboard"                             />
+  <!-- Launch of_driving node --> 
+	<node name="of_driving_node"    pkg="of_driving"  type="of_driving_node"      output="screen" />
+  
+  <!-- run only if you have already logged raw data from a video camera -->
+  <group if="$(arg LOGGED)">
+  	<node name="video_publisher_node" pkg="rawVideoPub" type="video_publisher_node" output="screen" args="$(arg filename)"/>  
+	<param name="publishing_rate"   value="30.0"  type="double" />
+  </group>
+
+</launch>
+

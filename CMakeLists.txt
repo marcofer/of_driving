@@ -116,6 +116,7 @@ set(src_files
   src/main.cpp
   src/image_converter.cpp
   src/of_driving.cpp
+  src/parallel_process.cpp
 )
 
 add_definitions(-std=c++0x)

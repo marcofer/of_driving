@@ -4,6 +4,7 @@
 //System includes
 #include <iostream>
 #include <string.h>
+#include <fstream>
 
 //Opencv includes
 #include <opencv2/core/core.hpp>
@@ -13,14 +14,25 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/opencv.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/gpu/gpu.hpp>
+#include <opencv2/features2d/features2d.hpp>
+#include <opencv2/calib3d/calib3d.hpp>
+#include "opencv2/nonfree/nonfree.hpp"
 
 
 //ROS includes 
 #include <ros/ros.h>
 #include <std_msgs/Float64.h>
+#include <std_msgs/Float64MultiArray.h>
+#include <geometry_msgs/Twist.h>
+
+#include <boost/math/tools/config.hpp>
+
+#include "parallel_process.h"
 
 using namespace std;
 using namespace cv;
+using namespace cv::gpu;
 
 
 class of_driving{
@@ -28,6 +40,9 @@ class of_driving{
 	ros::NodeHandle nh_;
 
 	ros::Publisher theta_pub, norm_pub, steering_pub;
+	ros::Publisher v_pub, w_pub;
+	ros::Publisher twist_pub;
+	ros::Publisher A_pub, b_pub;
 
 public:
 	//Constructor
@@ -41,11 +56,12 @@ public:
 
 	//initialization of the sampling time
 	inline void setTc(double T_c) {Tc = T_c;}
+	inline void setLowPassFrequency(double f){img_lowpass_freq = f;}
 
 	inline void set_tilt(double tilt) {camera_tilt = tilt;}
 
 	//run function - Real time image processing algorithm
-	void run(Mat& img, Mat& prev_img, double, double);
+	void run(Mat& img, Mat& prev_img, double, double, bool);
 
 	//Set the tilt and pan angles of the camera mounted on the car
 	bool setPanTilt(int key, float tilt_cmd, float pan_cmd);
@@ -67,9 +83,13 @@ public:
 
 private:
 
-	//Simulation flag
-	bool simulation;
+	Mat H;
 
+	//Optical Flow algorithm flag
+	int of_alg;
+	string of_alg_name;
+
+	
 	//Image size
 	int img_height, img_width;
 
@@ -86,11 +106,12 @@ private:
 
 	double px_old, py_old;
 
+	double publishing_rate;
 
 	//linear velocity
 	double linear_vel;
 
-	double img_lowpass_freq, ctrl_lowpass_freq;
+	double img_lowpass_freq;
 
 	//Car control variables
 	double steering;
@@ -104,10 +125,6 @@ private:
 	//number of layer for multiresolution pyramid transform
 	int maxLayer;
 
-	//cut-off frequencies for low-pass filtering
-	double cutoff_f_dp;
-	double cutoff_f_vel;
-
 	//gradient scale factor
 	double grad_scale;
 
@@ -117,7 +134,6 @@ private:
 
 	//optical flow field
 	Mat optical_flow, old_flow;
-	vector<Mat> of_pyramid;
 
 	//planar flow field
 	Mat planar_flow;
@@ -142,9 +158,7 @@ private:
 	//Affine Coefficients
 	Matx22f A;
 	Matx21f b;
-
-	//Flag for Optical Flow algorithm
-	bool LKpyr;
+	Mat Ab;
 
 	bool control;
 
@@ -162,62 +176,76 @@ private:
 
 	//Farneback algorithm iterations
 	int of_iterations;
+	double pyr_scale;
+	int pyr_scale10;
 
 	//RANSAC terminate condition
 	int max_counter;
 
 	//Threshold for flows comparison
 	double epsilon;
+	int eps_int;
 
 	//Vehicle wheelbase
 	double wheelbase;
 
 
 	/** Variable used for video recording **/
-	VideoWriter record;
+	VideoWriter record, record_total;
 	bool save_video;
 
 	//flag to activate fake black corners
 	bool fake_corners;
 
+	//scale factor for optcal flow
+	int of_scale;
+
 	/* Methods */
+
+
 	void computeOpticalFlowField(Mat&, Mat&);
 
 	void estimateAffineCoefficients(bool,Mat&);
-	void estimatePlanarFlowField(Mat&);
-	void buildDominantPlane();
+	void buildPlanarFlowAndDominantPlane();
 	void computeGradientVectorField();
 	void computePotentialField();
 	void computeControlForceOrientation();
+
 	void computeRobotVelocities(double, double);
-    void displayImages(Mat&);
+    void sendCmdToNAO(double,double);
+
+    Mat displayImages(Mat&);
 
     void fakeBlackSpot();
 
-	//Warping image operation
-	Mat warpImage(Mat,Mat);
-
-
-	double low_pass_filter(double in, double out_old, double Tc, double tau);
-	double high_pass_filter(double in, double in_prev, double out_old, double Tc, double tau);
-
-    void arrowedLine2(Mat&, cv::Point2f, cv::Point2f, const Scalar&, int thickness, int line_type, int shift, 
-    double tipLength);
 
     void displayImagesWithName(Mat&, string name);
-    void updateInitialGuessOF();
+	
+    clock_t start, end;
+    timeval time_tod, start_plot;
 
+
+    //*** GPU BROX OPTICAL FLOW ***/
+	double scale;
+	int scale_int;
+	double alpha;
+	int alpha_int;
+	int gamma;
+	int inner;
+	int outer;
+	int solver;
+	//*** ***/
+
+	int cores_num;
 
 
 };
 
+void arrowedLine2(Mat&, cv::Point2f, cv::Point2f, const Scalar&, int thickness, int line_type, int shift, double tipLength);
 
-
-
-
-
-
-
+double low_pass_filter(double in, double out_old, double Tc, double tau);
+double high_pass_filter(double in, double in_prev, double out_old, double Tc, double tau);
+void getFlowField(const Mat& u, const Mat& v, Mat& flowField);
 
 
 

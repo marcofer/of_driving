@@ -7,7 +7,7 @@
 #include <sensor_msgs/image_encodings.h>
 #include "of_driving.h"
 #include <sensor_msgs/Joy.h>
-
+#include <time.h>
 
 using namespace std;
 using namespace cv;
@@ -31,12 +31,13 @@ class ImageConverter{
 	//car-camera parameters publishers
 	ros::Publisher tilt_pub_, pan_pub_, alpha_pub_, beta_pub_;
 
+	ros::Publisher hz_pub;
+
 	//instance of class of_driving
 	//of_driving drive;
 
-	clock_t begin_t, end_t;
-	ros::Time begin, end;
-	float t0;
+	timeval start_tod, end_tod;
+	double elapsed_tod;
 
 	of_driving drive;
 
@@ -68,6 +69,8 @@ private:
 	bool real;
 	bool NAOimg;
 
+	double publishing_rate;
+	double sample_frequency;
 
 	//image processing parameters
 	int img_width, img_height;
