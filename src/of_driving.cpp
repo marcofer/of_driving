@@ -41,6 +41,9 @@ of_driving::of_driving(): nh_(){
 
     wheelbase = 2.06;
 
+    erode_int = erode_factor*10.0;
+    dilate_int = dilate_factor*10.0;
+
 	Rold = 0.0;
 	px_old = 0.0;
 	py_old = 0.0;
@@ -99,7 +102,29 @@ void of_driving::initFlows(){
 	potential_field = Mat::zeros(img_height,img_width,CV_32FC2);
 	point_counter = 0;
 	best_counter = 0;
-	max_counter = img_height*img_width/2;
+	
+	/*double ROI_width = img_width/2.0;
+	double ROI_height = img_height/2.0;
+	double ROI_x = img_width/4.0;
+	double ROI_y = img_height/4.0;//*/
+
+	ROI_width = img_width;
+	ROI_height = img_height/2.0;
+	ROI_x = 0;
+	ROI_y = img_height/4.0;//*/
+
+	/*double ROI_width = img_width;
+	double ROI_height = img_height/4.0;
+	double ROI_x = 0.0;
+	double ROI_y = 3.0*img_height/4.0;//*/
+
+	double RANSAC_percent = 0.8; //( = 90%)
+
+
+	//max_counter = img_height*img_width/2;
+	max_counter = ROI_height*ROI_width*RANSAC_percent;
+	//rect_ransac = Rect(ROI_x,ROI_y,ROI_width,ROI_height);
+	//ROI_ransac = dominant_plane(rect_ransac);
 
 
 	if(save_video){
@@ -132,7 +157,6 @@ void of_driving::initFlows(){
 
 	eps_int = epsilon*100.0;
 
-	namedWindow(of_alg_name,WINDOW_AUTOSIZE);
 
 	switch(of_alg){
 		case LK:
@@ -171,6 +195,8 @@ void of_driving::initFlows(){
 			createTrackbar("epsilon*100",of_alg_name,&eps_int,500,NULL);
 			createTrackbar("of_scale",of_alg_name,&of_scale,10,NULL);
 			createTrackbar("pyr_scale*10",of_alg_name,&pyr_scale10,10,NULL);
+			createTrackbar("erode*10",of_alg_name,&erode_int,100,NULL);
+			createTrackbar("dilate*10",of_alg_name,&dilate_int,100,NULL);
 			break;
 		case GPU_BROX:
 			cout << "GPU Brox" << endl;
@@ -189,6 +215,16 @@ void of_driving::initFlows(){
 
 
 }
+
+void of_driving::setRectHeight(int rect_cmd){
+	float delta = 1.0;
+
+	ROI_y += delta*rect_cmd;
+
+	ROI_y = ((ROI_y >= 0) ? ( (ROI_y <= img_height - ROI_height -1 ) ? (ROI_y) : (img_height - ROI_height -1)  ) : (0));
+
+}
+
 
 
 bool of_driving::setPanTilt(int key, float tilt_cmd, float pan_cmd){
@@ -269,13 +305,19 @@ void of_driving::plotPanTiltInfo(Mat& img, float tilt_cmd, float pan_cmd){
 
 void of_driving::run(Mat& img, Mat& prev_img, double acc, double steer, bool real){
 
+	Rect rect_ransac(ROI_x,ROI_y,ROI_width,ROI_height);
+	Mat ROI_ransac = dominant_plane(rect_ransac);
+
 	epsilon = (double)eps_int/100.0;
 	alpha = (double)alpha_int/1000.0;
 	pyr_scale = (double)pyr_scale10/10.0;
+	erode_factor = (double)erode_int/10.0;
+	dilate_factor = (double)dilate_int/10.0;
 
 	int k = 0;
 	best_counter = 0;
 
+	prev_img.copyTo(image);
 
 	if(save_video){
 		record.write(img);
@@ -291,14 +333,15 @@ void of_driving::run(Mat& img, Mat& prev_img, double acc, double steer, bool rea
 	computeOpticalFlowField(GrayPrevImg,GrayImg);
 	//computeOpticalFlowField(gpu_prevImg,gpu_Img);
 
+
 	while(point_counter <= max_counter && k < iteration_num){
 
         // --- 2. Compute affine coefficients by random selection of three points 
-		estimateAffineCoefficients(false,GrayPrevImg);
+		estimateAffineCoefficients(false,GrayPrevImg,ROI_ransac,rect_ransac);
 		
 		// --- 3-4. Estimate planar flow from affine coefficients and Match the computed optical flow and esitmated planar flow, so detect the dominant plane. If the dominant plane occupies
         // less than half of the image, then go to step (2)
-		buildPlanarFlowAndDominantPlane();
+		buildPlanarFlowAndDominantPlane(ROI_ransac);
 		
         
 		if(point_counter >= best_counter){
@@ -314,12 +357,12 @@ void of_driving::run(Mat& img, Mat& prev_img, double acc, double steer, bool rea
 	}
 
     /// --- 2. Robust computation of affine coefficients with all the points belonging to the detected dominant plane 	
-    estimateAffineCoefficients(true,GrayPrevImg);//*/
+    estimateAffineCoefficients(true,GrayPrevImg,ROI_ransac,rect_ransac);//*/
 
 	/// --- 3. 
 
     /// --- 3-4. Estimate planar flow from affine coefficients and Match the computed optical flow and esitmated planar flow, so detect the dominant plane
-    buildPlanarFlowAndDominantPlane();
+    buildPlanarFlowAndDominantPlane(ROI_ransac);
 
     /// --- Create artificial obstacles on the top corners of the image, to avoid collisions due to FOV limitation in simulated scene
     if(fake_corners){
@@ -347,7 +390,7 @@ void of_driving::run(Mat& img, Mat& prev_img, double acc, double steer, bool rea
 	Mat total = Mat::zeros(2*img_height,3*img_width,CV_8UC3);
 	
 	/*** MULTI-THREADED DISPLAY ***/
-	parallel_for_(Range(0,6),ParallelDisplayImages(6,flowResolution,prev_img,optical_flow,planar_flow,dominant_plane,smoothed_plane,gradient_field,p_bar,total));
+	parallel_for_(Range(0,6),ParallelDisplayImages(6,flowResolution,prev_img,optical_flow,planar_flow,dominant_plane,smoothed_plane,gradient_field,p_bar,total,rect_ransac));
 	if(save_video){
 		record_total.write(total);
 	}//*/
@@ -355,6 +398,7 @@ void of_driving::run(Mat& img, Mat& prev_img, double acc, double steer, bool rea
 	/*** SINGLE-THREADED DISPLAY ***/
 	//total = displayImages(prev_img);//*/
 	
+
 	imshow(of_alg_name,total);
     cvWaitKey(1);
 
@@ -507,24 +551,18 @@ void of_driving::computeOpticalFlowField(Mat& prevImg, Mat& img){
 }
 
 
-void of_driving::estimateAffineCoefficients(bool robust, Mat& gImg){
+void of_driving::estimateAffineCoefficients(bool robust, Mat& gImg,Mat& ROI_ransac, Rect& rect_ransac){
 
 	vector<Point2f> prevSamples, nextSamples;
 	int i, j;
 
-	////Select the ROI ratio of the image where the random points has to be extracted (ex: 2 means that the bottom half image is taken)
-	////(img_ratio = 1 selects the whole image)
-	int img_ratio = 2;
-	double roi_height_ratio = 1.0 - 1.0/(double)img_ratio;
-
 	////if affine coefficients are retrieved by only three random points ...
 	if(!robust){ 
 		for (int k = 0 ; k < 3 ; k ++){
-			//do{
-				i = rand()%(img_height/img_ratio) + roi_height_ratio*img_height;
-				j = rand()%img_width;
-			//}
-			//while(norm(optical_flow.at<Point2f>(i,j)) < 2.0 && norm(optical_flow.at<Point2f>(i,j)) > 0.001);
+
+			i = rand()%(ROI_ransac.rows) + rect_ransac.tl().y;
+			j = rect_ransac.br().x - rand()%(ROI_ransac.cols); 
+
 			Point2f p(j,i);
 			Point2f* of_ptr = optical_flow.ptr<Point2f>(i);
 			Point2f p2(of_ptr[j] + p);
@@ -582,20 +620,22 @@ void of_driving::estimateAffineCoefficients(bool robust, Mat& gImg){
 }//*/
 
 
-void of_driving::buildPlanarFlowAndDominantPlane(){
+void of_driving::buildPlanarFlowAndDominantPlane(Mat& ROI_ransac){
 
 	point_counter = 0;
 
 	/*** MULTI-THREADED ***/
 	parallel_for_(Range(0,cores_num),ParallelDominantPlaneBuild(cores_num,dominant_plane,old_plane,optical_flow,planar_flow,epsilon,Tc,img_lowpass_freq,erode_factor,dilate_factor,A,b));	
 	
-	/*erode(dominant_plane, dominant_plane, getStructuringElement(MORPH_ELLIPSE, Size(erode_factor,erode_factor)));
-	dilate(dominant_plane, dominant_plane, getStructuringElement(MORPH_ELLIPSE, Size(dilate_factor,dilate_factor)));//*/
 
 	/*dilate(dominant_plane, dominant_plane, getStructuringElement(MORPH_ELLIPSE, Size(dilate_factor,dilate_factor)));
 	erode(dominant_plane, dominant_plane, getStructuringElement(MORPH_ELLIPSE, Size(erode_factor,erode_factor)));//*/
+	
+	/*erode(dominant_plane, dominant_plane, getStructuringElement(MORPH_ELLIPSE, Size(erode_factor,erode_factor)));
+	dilate(dominant_plane, dominant_plane, getStructuringElement(MORPH_ELLIPSE, Size(dilate_factor,dilate_factor)));//*/
 
 	/*** SINGLE-THREADED PLANAR FLOW CONSTRUCTION ***/
+	
 	/*for (int i = 0 ; i < img_height ; i ++){
 		Point2f* i_ptr = planar_flow.ptr<Point2f>(i);
 		for (int j = 0 ; j < img_width ; j ++){
@@ -604,7 +644,7 @@ void of_driving::buildPlanarFlowAndDominantPlane(){
 			Point2f planar_p(planar_vec(0),planar_vec(1));
 			i_ptr[j] = planar_p;
 		}
-	}
+	}//*/
 
 	/*** SINGLE-THREADED DOMINANT PLANE CONSTRUCTION ***/
 	/*for (int i = 0 ; i < img_height ; i ++){
@@ -642,8 +682,11 @@ void of_driving::buildPlanarFlowAndDominantPlane(){
 	double maxVal = 255;
 	threshold(dominant_plane,dominant_plane,thresh,maxVal,THRESH_BINARY);//*/
 
-    point_counter = countNonZero(dominant_plane);
+    //point_counter = countNonZero(dominant_plane);
+    point_counter = countNonZero(ROI_ransac);
 
+    imshow("ROI_ransac",ROI_ransac);
+    
 
 }
 

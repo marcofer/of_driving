@@ -43,6 +43,7 @@ ImageConverter::ImageConverter(): nh_(), it_(nh_){
 	hz_pub = nh_.advertise<std_msgs::Float64>("/hz",1);
 
 	//Initialization
+	rect_cmd = 0.0;
 	tilt_cmd = 0.0;
 	pan_cmd = 0.0;
 	accelerate_cmd = 0.0;
@@ -155,9 +156,11 @@ void ImageConverter::msgKeyDown(const keyboard::Key::ConstPtr& msg){
 	switch(msg->code){
 		case(117): // press 'u'
 			tilt_cmd = 1.0;
+			rect_cmd = 1.0;
 			break;
 		case(100): // press 'd'
 			tilt_cmd = -1.0;
+			rect_cmd = -1.0;
 			break;
 		case(114): // press 'r'
 			pan_cmd = -1.0;
@@ -177,9 +180,11 @@ void ImageConverter::msgKeyUp(const keyboard::Key::ConstPtr& msg){
 	switch(msg->code){
 		case(117): //release 'u'
 			tilt_cmd = 0.0;
+			rect_cmd = 0.0;
 			break;
 		case(100): //release 'd'
 			tilt_cmd = 0.0;
+			rect_cmd = 0.0;
 			break;
 		case(114): //release 'r'
 			pan_cmd = 0.0;
@@ -223,6 +228,7 @@ void ImageConverter::run_algorithm(Mat& img, Mat& prev_img){
 		}
 	}
 	else{
+		drive.setRectHeight(rect_cmd);
 		drive.run(img,prev_img,accelerate_cmd,steer_cmd,real);	
 	}
 

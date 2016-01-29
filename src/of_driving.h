@@ -65,7 +65,7 @@ public:
 
 	//Set the tilt and pan angles of the camera mounted on the car
 	bool setPanTilt(int key, float tilt_cmd, float pan_cmd);
-
+	void setRectHeight(int rect_cmd);
 	//Print on the image he information about the current pan and tilt angles of the camera
 	void plotPanTiltInfo(Mat& img, float tilt_cmd, float pan_cmd);
 
@@ -81,15 +81,25 @@ public:
 	//initialize flows
 	void initFlows();
 
+
 private:
 
 	Mat H;
+
+	//Mat ROI_ransac;
+	//Rect rect_ransac;
+	double ROI_width;
+	double ROI_height;
+	double ROI_x ;
+	double ROI_y;
+
+
 
 	//Optical Flow algorithm flag
 	int of_alg;
 	string of_alg_name;
 
-	
+	Mat image;
 	//Image size
 	int img_height, img_width;
 
@@ -131,6 +141,8 @@ private:
 	//erode/dilate scale factor
 	double erode_factor;
 	double dilate_factor;
+	int erode_int;
+	int dilate_int;
 
 	//optical flow field
 	Mat optical_flow, old_flow;
@@ -180,7 +192,7 @@ private:
 	int pyr_scale10;
 
 	//RANSAC terminate condition
-	int max_counter;
+	double max_counter;
 
 	//Threshold for flows comparison
 	double epsilon;
@@ -205,8 +217,8 @@ private:
 
 	void computeOpticalFlowField(Mat&, Mat&);
 
-	void estimateAffineCoefficients(bool,Mat&);
-	void buildPlanarFlowAndDominantPlane();
+	void estimateAffineCoefficients(bool,Mat&,Mat&,Rect&);
+	void buildPlanarFlowAndDominantPlane(Mat&);
 	void computeGradientVectorField();
 	void computePotentialField();
 	void computeControlForceOrientation();

@@ -42,7 +42,7 @@ void ParallelDominantPlaneBuild::operator()(const cv::Range& range) const{
                 Point2f xdot(of_ptr[j]);
                 Point2f xhat(pf_ptr[j]);
                 
-                if(norm(xdot - xhat) < epsilon){
+                if( norm(xdot - xhat) < epsilon ) {
                     dp_ptr[j] = 255;
                 }
                 else{
@@ -59,9 +59,9 @@ void ParallelDominantPlaneBuild::operator()(const cv::Range& range) const{
             for (int j = 0 ; j < cols ; j ++){
                     dp_ptr[j] = low_pass_filter(dp_ptr[j],op_ptr[j],Tc,1.0/cut_f);
             }
-        }//*/   
+        }   
 
-        dp_rect.copyTo(op_rect);//*/
+        dp_rect.copyTo(op_rect);
 
         double thresh = 100; //100
         double maxVal = 255;
@@ -181,6 +181,7 @@ void ParallelDisplayImages::operator()(const cv::Range& range) const{
         if(k == 2){
             Mat dp_img;
             cvtColor(dp,dp_img,CV_GRAY2BGR);
+            rectangle(dp_img,dpROI.tl(),dpROI.br(),Scalar(0,255,0),4);
             dp_img.copyTo(total(Rect(2*img.cols,0,img.cols,img.rows)));
         }        
 

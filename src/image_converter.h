@@ -61,6 +61,7 @@ private:
 	//Keyboard commands
 	int pan_cmd, tilt_cmd;
 	double accelerate_cmd, steer_cmd;
+	double rect_cmd;
 	//value to terminate image display
 	int key;
 

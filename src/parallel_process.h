@@ -107,10 +107,11 @@ class ParallelDisplayImages : public cv::ParallelLoopBody {
 		cv::Mat gf;
 		cv::Matx21f p_bar;
 		cv::Mat& total;
+		cv::Rect dpROI;
 
 	public:
-		ParallelDisplayImages(int cores, int flow_res, cv::Mat img_,cv::Mat of_,cv::Mat pf_,cv::Mat dp_,cv::Mat sp_,cv::Mat gf_,cv::Matx21f p_bar_,cv::Mat& total_)
-					: coreNum(cores), flowResolution(flow_res), img(img_), of(of_), pf(pf_), dp(dp_), sp(sp_), gf(gf_), p_bar(p_bar_), total(total_){}
+		ParallelDisplayImages(int cores, int flow_res, cv::Mat img_,cv::Mat of_,cv::Mat pf_,cv::Mat dp_,cv::Mat sp_,cv::Mat gf_,cv::Matx21f p_bar_,cv::Mat& total_, cv::Rect roi)
+					: coreNum(cores), flowResolution(flow_res), img(img_), of(of_), pf(pf_), dp(dp_), sp(sp_), gf(gf_), p_bar(p_bar_), total(total_), dpROI(roi){}
 		virtual void operator()(const cv::Range& range) const;
 
 
