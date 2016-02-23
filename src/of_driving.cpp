@@ -4,7 +4,7 @@
 
 using namespace cv::gpu;
 
-enum OF_ALG{LK,FARNEBACK,GPU_LK_DENSE,GPU_FARNEBACK,GPU_BROX};
+enum OF_ALG{LK,FARNEBACK,GPU_LK_SPARSE,GPU_LK_DENSE,GPU_FARNEBACK,GPU_BROX};
 
 of_driving::of_driving(): nh_(){
 
@@ -30,23 +30,36 @@ of_driving::of_driving(): nh_(){
         ROS_INFO("save_video %s ", save_video ? "true" : "false");    
     if(nh_.getParam("fake_corners",fake_corners))
         ROS_INFO("fake_corners %s ", fake_corners ? "true" : "false");    
-    if(nh_.getParam("erode_factor",erode_factor))
-        ROS_INFO("erode_factor set to %f ", erode_factor);    
-    if(nh_.getParam("dilate_factor",dilate_factor))
-        ROS_INFO("dilate_factor set to %f ", dilate_factor); 
+    if(nh_.getParam("open_erode",open_erode))
+        ROS_INFO("open_erode set to %f ", open_erode);    
+    if(nh_.getParam("close_erode",close_erode))
+        ROS_INFO("close_erode set to %f ", close_erode);    
+    if(nh_.getParam("open_dilate",open_dilate))
+        ROS_INFO("open_dilate set to %f ", open_dilate);    
+    if(nh_.getParam("close_dilate",close_dilate))
+        ROS_INFO("close_dilate set to %f ", close_dilate);    
     if(nh_.getParam("of_alg",of_alg))
         ROS_INFO("of_alg set to %d ", of_alg);  
     if(nh_.getParam("of_scale",of_scale))
         ROS_INFO("of_scale set to %d ", of_scale);    
+    if(nh_.getParam("RANSAC_imgPercent",RANSAC_imgPercent))
+        ROS_INFO("RANSAC_imgPercent set to %f ", RANSAC_imgPercent); 
+    if(nh_.getParam("dp_threshold",dp_threshold))
+        ROS_INFO("dp_threshold set to %d ", dp_threshold);  
 
     wheelbase = 2.06;
 
-    erode_int = erode_factor*10.0;
-    dilate_int = dilate_factor*10.0;
-
+    open_erode_int = open_erode*10.0;
+	close_erode_int = close_erode*10.0;
+	open_dilate_int = open_dilate*10.0;
+	close_dilate_int = close_dilate*10.0;
+    
 	Rold = 0.0;
 	px_old = 0.0;
 	py_old = 0.0;
+
+
+	angular_vel = 0.0;
 
 	steering = 0.0;
 	ankle_angle = 0.0;
@@ -74,6 +87,9 @@ of_driving::of_driving(): nh_(){
 	A_pub = nh_.advertise<std_msgs::Float64MultiArray>("/A",1);
 	b_pub = nh_.advertise<std_msgs::Float64MultiArray>("/b",1);
 
+	p_pub = nh_.advertise<geometry_msgs::Point>("/p",1);
+	nofilt_p_pub = nh_.advertise<geometry_msgs::Point>("/nofilt_p",1);
+
 	gettimeofday(&start_plot,NULL);
 
 	cores_num = sysconf( _SC_NPROCESSORS_ONLN );
@@ -96,12 +112,15 @@ void of_driving::initFlows(){
 	dominant_plane = Mat::zeros(img_height,img_width,CV_8UC1);
 	old_plane = Mat::zeros(img_height,img_width,CV_8UC1);
 	smoothed_plane = Mat::zeros(img_height,img_width,CV_8UC1);
+	dominantHull = Mat::zeros( img_height, img_width, CV_8UC1 );
 	best_plane = Mat::zeros(img_height,img_width,CV_8UC1);
 	planar_flow = Mat::zeros(img_height,img_width,CV_32FC2);
 	gradient_field = Mat::zeros(img_height,img_width,CV_32FC2);
 	potential_field = Mat::zeros(img_height,img_width,CV_32FC2);
 	point_counter = 0;
 	best_counter = 0;
+
+	area_ths = 50;
 	
 	/*double ROI_width = img_width/2.0;
 	double ROI_height = img_height/2.0;
@@ -109,26 +128,27 @@ void of_driving::initFlows(){
 	double ROI_y = img_height/4.0;//*/
 
 	ROI_width = img_width;
-	ROI_height = img_height/2.0;
-	ROI_x = 0;
-	ROI_y = img_height/4.0;//*/
+	//ROI_height = img_height/2;
+	ROI_height = img_height;
+	
+	//ROI_x = 0;
+	ROI_x = 0;//*/
+	ROI_y = 0;//*/
+	//ROI_y = 0;//*/
 
 	/*double ROI_width = img_width;
 	double ROI_height = img_height/4.0;
 	double ROI_x = 0.0;
 	double ROI_y = 3.0*img_height/4.0;//*/
 
-	double RANSAC_percent = 0.8; //( = 90%)
-
-
 	//max_counter = img_height*img_width/2;
-	max_counter = ROI_height*ROI_width*RANSAC_percent;
+	max_counter = ROI_height*ROI_width*RANSAC_imgPercent;
 	//rect_ransac = Rect(ROI_x,ROI_y,ROI_width,ROI_height);
 	//ROI_ransac = dominant_plane(rect_ransac);
 
 
 	if(save_video){
-		record.open("camera.avi", CV_FOURCC('D','I','V','X'),3.0, cvSize(img_width,img_height), true);
+		record.open("camera.avi", CV_FOURCC('D','I','V','X'),30.0, cvSize(img_width,img_height), true);
 		if( !record.isOpened() ) {
 			cout << "VideoWriter failed to open!" << endl;
 			}
@@ -163,57 +183,73 @@ void of_driving::initFlows(){
 			cout << "LK" << endl;
 			of_alg_name = "Lucas-Kanade Optical Flow";
 			namedWindow(of_alg_name,WINDOW_AUTOSIZE);
-			createTrackbar("winSize",of_alg_name,&windows_size,30,NULL);
-			createTrackbar("pyr levels",of_alg_name,&maxLayer,5,NULL);
-			createTrackbar("epsilon",of_alg_name,&eps_int,25,NULL);
 			break;		
 		case FARNEBACK:
 			cout << "Farneback" << endl;
 			of_alg_name = "Farneback Optical Flow";
-			namedWindow(of_alg_name,WINDOW_AUTOSIZE);
-			createTrackbar("winSize",of_alg_name,&windows_size,30,NULL);
-			createTrackbar("pyr levels",of_alg_name,&maxLayer,5,NULL);
-			createTrackbar("iters",of_alg_name,&of_iterations,30,NULL);
-			createTrackbar("epsilon",of_alg_name,&eps_int,25,NULL);
 			break;		
+		case GPU_LK_SPARSE:
+			cout << "GPU LK sparse" << endl;
+			of_alg_name = "GPU Sparse Lucas-Kanade Optical Flow";
+			break;//*/
 		case GPU_LK_DENSE:
 			cout << "GPU LK dense" << endl;
 			of_alg_name = "GPU Dense Lucas-Kanade Optical Flow";
-			namedWindow(of_alg_name,WINDOW_AUTOSIZE);
-			createTrackbar("winSize",of_alg_name,&windows_size,30,NULL);
-			createTrackbar("pyr levels",of_alg_name,&maxLayer,5,NULL);
-			createTrackbar("iters",of_alg_name,&of_iterations,30,NULL);
-			createTrackbar("epsilon",of_alg_name,&eps_int,25,NULL);
 			break;
 		case GPU_FARNEBACK:
 			cout << "GPU Farneback" << endl;
 			of_alg_name = "GPU Farneback Optical Flow";
-			namedWindow(of_alg_name,WINDOW_AUTOSIZE);
-			createTrackbar("winSize",of_alg_name,&windows_size,50,NULL);
-			createTrackbar("pyr levels",of_alg_name,&maxLayer,5,NULL);
-			createTrackbar("iters",of_alg_name,&of_iterations,50,NULL);
-			createTrackbar("epsilon*100",of_alg_name,&eps_int,500,NULL);
-			createTrackbar("of_scale",of_alg_name,&of_scale,10,NULL);
-			createTrackbar("pyr_scale*10",of_alg_name,&pyr_scale10,10,NULL);
-			createTrackbar("erode*10",of_alg_name,&erode_int,100,NULL);
-			createTrackbar("dilate*10",of_alg_name,&dilate_int,100,NULL);
 			break;
 		case GPU_BROX:
 			cout << "GPU Brox" << endl;
 			of_alg_name = "GPU Brox Optical Flow";
-			namedWindow(of_alg_name,WINDOW_AUTOSIZE);
-			createTrackbar("gamma",of_alg_name,&gamma,50,NULL);
-			createTrackbar("alpha",of_alg_name,&alpha_int,1000,NULL);
-			createTrackbar("inner",of_alg_name,&inner,50,NULL);
-			createTrackbar("outer",of_alg_name,&outer,5,NULL);
-			createTrackbar("solver",of_alg_name,&solver,50,NULL);
-			createTrackbar("epsilon",of_alg_name,&eps_int,25,NULL);
 			break;
 		default:
 			break;
 	}//*/
 
 
+	namedWindow(of_alg_name,WINDOW_AUTOSIZE);
+
+
+	open_close = 0;
+	createButton("OpenClose",callbackButton,&open_close,CV_CHECKBOX,0);
+
+
+	createTrackbar("winSize",of_alg_name,&windows_size,51,NULL);
+
+	if(of_alg != LK && of_alg != GPU_BROX){
+		createTrackbar("iters",of_alg_name,&of_iterations,50,NULL);
+	}
+	else if(of_alg == GPU_BROX){
+		createTrackbar("gamma",of_alg_name,&gamma,50,NULL);
+		createTrackbar("alpha",of_alg_name,&alpha_int,1000,NULL);
+		createTrackbar("inner",of_alg_name,&inner,50,NULL);
+		createTrackbar("outer",of_alg_name,&outer,5,NULL);
+		createTrackbar("solver",of_alg_name,&solver,50,NULL);		
+	}
+
+	//createTrackbar("pyr levels",of_alg_name,&maxLayer,5,NULL);
+	createTrackbar("epsilon*100",of_alg_name,&eps_int,500,NULL);
+	//createTrackbar("of_scale",of_alg_name,&of_scale,10,NULL);
+	//createTrackbar("maxLevel",of_alg_name,&maxLayer,6,NULL);
+	//createTrackbar("pyr_scale*10",of_alg_name,&pyr_scale10,10,NULL);
+	createTrackbar("dp_threshold",of_alg_name,&dp_threshold,255,NULL);
+	createTrackbar("O_erode*10",of_alg_name,&open_erode_int,200,NULL);
+	createTrackbar("O_dilat*10",of_alg_name,&open_dilate_int,200,NULL);
+	createTrackbar("C_dilat*10",of_alg_name,&close_dilate_int,200,NULL);
+	createTrackbar("C_erode*10",of_alg_name,&close_erode_int,200,NULL);//*/
+	//createTrackbar("area_ths",of_alg_name,&area_ths,1000,NULL);
+
+
+}
+
+
+void callbackButton(int state, void* data){
+
+	bool* var = reinterpret_cast<bool*>(data);
+	*var = !(*var);
+	cout << "Performing " << ( (*var) ? ("Opening -> Closing") : ("Closing -> Opening") )<< endl << endl; 
 }
 
 void of_driving::setRectHeight(int rect_cmd){
@@ -221,7 +257,7 @@ void of_driving::setRectHeight(int rect_cmd){
 
 	ROI_y += delta*rect_cmd;
 
-	ROI_y = ((ROI_y >= 0) ? ( (ROI_y <= img_height - ROI_height -1 ) ? (ROI_y) : (img_height - ROI_height -1)  ) : (0));
+	ROI_y = ((ROI_y > 0) ? ( (ROI_y <= img_height - ROI_height -1 ) ? (ROI_y) : (img_height - ROI_height -1)  ) : (0));
 
 }
 
@@ -304,6 +340,12 @@ void of_driving::plotPanTiltInfo(Mat& img, float tilt_cmd, float pan_cmd){
 }
 
 void of_driving::run(Mat& img, Mat& prev_img, double acc, double steer, bool real){
+	
+	if(save_video){
+		record.write(img);
+	}//*/
+	
+	dominantHull = Mat::zeros( img_height, img_width, CV_8UC1 );
 
 	Rect rect_ransac(ROI_x,ROI_y,ROI_width,ROI_height);
 	Mat ROI_ransac = dominant_plane(rect_ransac);
@@ -311,17 +353,22 @@ void of_driving::run(Mat& img, Mat& prev_img, double acc, double steer, bool rea
 	epsilon = (double)eps_int/100.0;
 	alpha = (double)alpha_int/1000.0;
 	pyr_scale = (double)pyr_scale10/10.0;
-	erode_factor = (double)erode_int/10.0;
-	dilate_factor = (double)dilate_int/10.0;
+	open_erode = (double)open_erode_int/10.0;
+	open_dilate = (double)open_dilate_int/10.0;
+	close_erode = (double)close_erode_int/10.0;
+	close_dilate = (double)close_dilate_int/10.0;
+	
+	epsilon *= of_scale;
+
+
+	if(windows_size%2 == 0){
+		windows_size += 2;
+	}
 
 	int k = 0;
 	best_counter = 0;
 
 	prev_img.copyTo(image);
-
-	if(save_video){
-		record.write(img);
-	}//*/
 
 	cvtColor(img,GrayImg,CV_BGR2GRAY);
 	cvtColor(prev_img,GrayPrevImg,CV_BGR2GRAY);
@@ -329,10 +376,13 @@ void of_driving::run(Mat& img, Mat& prev_img, double acc, double steer, bool rea
 	GpuMat gpu_prevImg(GrayPrevImg);
 	GpuMat gpu_Img(GrayImg);
 
+
+        const int64 start = getTickCount();
+
+
 	/// ---  1. Compute the optical flow field u(x,y,t) (output: optical_flow matrix)
 	computeOpticalFlowField(GrayPrevImg,GrayImg);
 	//computeOpticalFlowField(gpu_prevImg,gpu_Img);
-
 
 	while(point_counter <= max_counter && k < iteration_num){
 
@@ -369,6 +419,17 @@ void of_driving::run(Mat& img, Mat& prev_img, double acc, double steer, bool rea
     	fakeBlackSpot();
     }
 
+    /*cout << "optical_flow.at<Point2f>(img_height - 10,img_width/2): " << optical_flow.at<Point2f>(img_height - 10,img_width/2) << endl;
+    cout << "planar.at<Point2f>(img_height - 10,img_width/2): " << planar_flow.at<Point2f>(img_height - 10,img_width/2) << endl ;
+    
+    if(norm(optical_flow.at<Point2f>(img_height - 10,img_width/2) - planar_flow.at<Point2f>(img_height - 10,img_width/2)) > 0.5){
+    	cout << "!!!!!!!!!!!!!!!!!!norm(diff): " << norm(optical_flow.at<Point2f>(img_height - 10,img_width/2) - planar_flow.at<Point2f>(img_height - 10,img_width/2)) << endl << endl;	
+    }
+    else{
+    	cout << "norm(diff): " << norm(optical_flow.at<Point2f>(img_height - 10,img_width/2) - planar_flow.at<Point2f>(img_height - 10,img_width/2)) << endl << endl;
+    }//*/
+
+
     /// --- 5. Compute gradient vector field from dominant plane 
     computeGradientVectorField();
 
@@ -390,7 +451,7 @@ void of_driving::run(Mat& img, Mat& prev_img, double acc, double steer, bool rea
 	Mat total = Mat::zeros(2*img_height,3*img_width,CV_8UC3);
 	
 	/*** MULTI-THREADED DISPLAY ***/
-	parallel_for_(Range(0,6),ParallelDisplayImages(6,flowResolution,prev_img,optical_flow,planar_flow,dominant_plane,smoothed_plane,gradient_field,p_bar,total,rect_ransac));
+	parallel_for_(Range(0,6),ParallelDisplayImages(6,flowResolution,prev_img,optical_flow,planar_flow,dominant_plane,smoothed_plane,dominantHull,gradient_field,p_bar,angular_vel,total,rect_ransac));
 	if(save_video){
 		record_total.write(total);
 	}//*/
@@ -400,7 +461,12 @@ void of_driving::run(Mat& img, Mat& prev_img, double acc, double steer, bool rea
 	
 
 	imshow(of_alg_name,total);
-    cvWaitKey(1);
+    cvWaitKey(1);//*/
+
+    const double timeSec = (getTickCount() - start) / getTickFrequency();
+    cout << "optical_flow timing : " << timeSec << " sec" << endl;
+
+    cout << "freq: " << 1.0/timeSec << endl;
 
 }
 
@@ -420,7 +486,7 @@ void of_driving::computeOpticalFlowField(Mat& prevImg, Mat& img){
 	(withDerivatives) ? (incr = 2) : (incr =  1) ;	
 
 
-	if(of_alg == LK || of_alg == GPU_LK_DENSE){
+	if(of_alg == LK || of_alg == GPU_LK_SPARSE){
 		//pick samples from the first image to compute sparse optical flow	
 		for (int i = 0 ; i < img.rows ; i += flowResolution){
 	    	for (int j = 0 ; j < img.cols ; j += flowResolution){
@@ -428,6 +494,18 @@ void of_driving::computeOpticalFlowField(Mat& prevImg, Mat& img){
 	        }
 	    }
 	}
+
+
+	Mat prevPtsMat, nextPtsMat;
+	/*prevPtsMat.create(1,prevPts.size(),CV_32FC2);
+
+	prevPtsMat = Mat(prevPts);
+
+	resize(prevPtsMat,prevPtsMat,cv::Size(prevPts.size(),1));
+
+	nextPtsMat.create(1,prevPts.size(),CV_32FC2);
+
+	int idx_sample = sampled_i/2 * sampled_j + sampled_j/2 ;		    		
     /***/
 
     /** FARNEBACK VARIABLES **/
@@ -442,8 +520,11 @@ void of_driving::computeOpticalFlowField(Mat& prevImg, Mat& img){
 	Mat img32F, prevImg32F;
 	GpuMat gpu_status;
 	GpuMat* gpu_err;
-	GpuMat gpuPrevPts(Mat(prevPts)), gpuNextPts;
-	
+
+
+	GpuMat gpuPrevPts(prevPtsMat);
+	GpuMat gpuNextPts(nextPtsMat);
+
 	img.convertTo(img32F,CV_32F,1.0/255.0);
 	prevImg.convertTo(prevImg32F,CV_32F,1.0/255.0);
 	GpuMat gpuImg32F(img32F);
@@ -456,6 +537,7 @@ void of_driving::computeOpticalFlowField(Mat& prevImg, Mat& img){
 	gpu::FarnebackOpticalFlow farneback_flow;//*/
     gpu::FastOpticalFlowBM fastBM;
 	GpuMat buf;//*/
+
 
 
 	/*gpu::FarnebackOpticalFlow farneback_flow;
@@ -480,7 +562,6 @@ void of_driving::computeOpticalFlowField(Mat& prevImg, Mat& img){
 	/*** GPU MULTI-THREADED FARNEBACK ***/
 	//parallel_for_(Range(0,2),ParallelOpticalFlow(2,farneback_flow,gpuPrevImg8U,gpuImg8U,u_flow,v_flow,optical_flow));
 
-
 	switch(of_alg){
 		case LK:
 			buildOpticalFlowPyramid(prevImg, prev_pyr,winSize,maxLayer,withDerivatives,BORDER_REPLICATE,BORDER_REPLICATE,true);
@@ -500,11 +581,31 @@ void of_driving::computeOpticalFlowField(Mat& prevImg, Mat& img){
 		case FARNEBACK:
 	    	calcOpticalFlowFarneback(prevImg, img, optical_flow, pyr_scale, maxLayer, winsize, of_iterations, poly_n, poly_sigma, flags);	
 			break;		
+		case GPU_LK_SPARSE:
+			sparseLK_flow.winSize = Size(windows_size,windows_size);
+			sparseLK_flow.maxLevel = maxLayer;
+			sparseLK_flow.iters = of_iterations;
+			sparseLK_flow.useInitialFlow = false;
+	    	sparseLK_flow.sparse(gpuPrevImg8U,gpuImg8U,gpuPrevPts,gpuNextPts,gpu_status,gpu_err);
+
+	    	gpuNextPts.download(nextPtsMat);
+
+			//fill the optical flow matrix with velocity vectors ( = difference of points in the two images)
+		    for (int i = 0 ; i < sampled_i ; i ++){
+		    	for (int j = 0 ; j < sampled_j ; j ++){
+		    		int idx = i * sampled_j + j ;		    		
+	    			Point2f p(nextPtsMat.at<Point2f>(1,idx) - prevPtsMat.at<Point2f>(1,idx));
+	    			Mat temp(flowResolution,flowResolution,CV_32FC2,Scalar(p.x,p.y));
+	    			if((j*flowResolution + flowResolution <= img_width) && (i*flowResolution + flowResolution) <= img_height)
+						temp.copyTo(optical_flow(Rect(j*flowResolution,i*flowResolution,flowResolution,flowResolution)));	    		 
+		    	}
+		    }
+			break;//*/
 		case GPU_LK_DENSE:
 			denseLK_flow.winSize = Size(windows_size,windows_size);
 			denseLK_flow.maxLevel = maxLayer;
 			denseLK_flow.iters = of_iterations;
-			denseLK_flow.useInitialFlow = false;
+			denseLK_flow.useInitialFlow = true;//*/
 	    	denseLK_flow.dense(gpuPrevImg8U,gpuImg8U,u_flow,v_flow);
 	    	getFlowField(Mat(u_flow),Mat(v_flow),optical_flow);
 			break;
@@ -531,7 +632,6 @@ void of_driving::computeOpticalFlowField(Mat& prevImg, Mat& img){
 	erode(optical_flow, optical_flow, getStructuringElement(MORPH_ELLIPSE, Size(10.0,10.0)));
 
    /*** LOW PASS FILTERING ***/
-   	double cutf = 15.0;
 	for (int i = 0 ; i < optical_flow.rows ; i ++){
 		Point2f* op_ptr = optical_flow.ptr<Point2f>(i);
 		Point2f* of_ptr = old_flow.ptr<Point2f>(i);
@@ -625,14 +725,29 @@ void of_driving::buildPlanarFlowAndDominantPlane(Mat& ROI_ransac){
 	point_counter = 0;
 
 	/*** MULTI-THREADED ***/
-	parallel_for_(Range(0,cores_num),ParallelDominantPlaneBuild(cores_num,dominant_plane,old_plane,optical_flow,planar_flow,epsilon,Tc,img_lowpass_freq,erode_factor,dilate_factor,A,b));	
+	parallel_for_(Range(0,cores_num),ParallelDominantPlaneBuild(cores_num,dominant_plane,old_plane,optical_flow,planar_flow,epsilon,Tc,img_lowpass_freq,A,b,dp_threshold));	
 	
 
-	/*dilate(dominant_plane, dominant_plane, getStructuringElement(MORPH_ELLIPSE, Size(dilate_factor,dilate_factor)));
-	erode(dominant_plane, dominant_plane, getStructuringElement(MORPH_ELLIPSE, Size(erode_factor,erode_factor)));//*/
-	
-	/*erode(dominant_plane, dominant_plane, getStructuringElement(MORPH_ELLIPSE, Size(erode_factor,erode_factor)));
-	dilate(dominant_plane, dominant_plane, getStructuringElement(MORPH_ELLIPSE, Size(dilate_factor,dilate_factor)));//*/
+	if(open_close){
+	//Morphological opening
+		erode(dominant_plane, dominant_plane, getStructuringElement(MORPH_ELLIPSE, Size(open_erode,open_erode)));
+		dilate(dominant_plane, dominant_plane, getStructuringElement(MORPH_ELLIPSE, Size(open_dilate,open_dilate)));//*/
+
+		//Morphological closing
+		dilate(dominant_plane, dominant_plane, getStructuringElement(MORPH_ELLIPSE, Size(close_dilate,close_dilate)));
+		erode(dominant_plane, dominant_plane, getStructuringElement(MORPH_ELLIPSE, Size(close_erode,close_erode)));//*/
+	}
+	else{
+		//Morphological closing
+		dilate(dominant_plane, dominant_plane, getStructuringElement(MORPH_ELLIPSE, Size(close_dilate,close_dilate)));
+		erode(dominant_plane, dominant_plane, getStructuringElement(MORPH_ELLIPSE, Size(close_erode,close_erode)));//*/
+
+		//Morphological opening
+		erode(dominant_plane, dominant_plane, getStructuringElement(MORPH_ELLIPSE, Size(open_erode,open_erode)));
+		dilate(dominant_plane, dominant_plane, getStructuringElement(MORPH_ELLIPSE, Size(open_dilate,open_dilate)));//*/
+	}
+
+
 
 	/*** SINGLE-THREADED PLANAR FLOW CONSTRUCTION ***/
 	
@@ -683,12 +798,67 @@ void of_driving::buildPlanarFlowAndDominantPlane(Mat& ROI_ransac){
 	threshold(dominant_plane,dominant_plane,thresh,maxVal,THRESH_BINARY);//*/
 
     //point_counter = countNonZero(dominant_plane);
-    point_counter = countNonZero(ROI_ransac);
 
-    imshow("ROI_ransac",ROI_ransac);
+
+	//computeMaxConvexHull();
+
+
+    point_counter = countNonZero(ROI_ransac);//*/
+
+    //imshow("ROI_ransac",ROI_ransac);
     
 
 }
+
+void of_driving::computeMaxConvexHull(){
+	vector < vector<Point> > contours;
+	vector<Vec4i> hierarchy;
+	Mat mod_plane;
+	dominant_plane.copyTo(mod_plane);
+
+	/// Find contours
+	findContours( mod_plane, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0) );
+
+	/// Find the convex hull object for each contour
+	/*vector<vector<Point> >hull( contours.size() );
+
+	for (int i = 0 ; i < contours.size () ; i ++){
+		convexHull(Mat(contours[i]),hull[i],false);
+	}//*/
+
+   /// Draw contours + hull results
+   double max_perimeter = 0.0;
+   int max_idx = 0;
+   for( int i = 0; i< contours.size(); i++ )
+      {
+        double perimeter = arcLength(contours[i],true);
+        double area = contourArea(contours[i],false);
+        
+        if(area > area_ths){
+        	drawContours( dominant_plane, contours, i, Scalar(255), -1, 8, vector<Vec4i>(), 0, Point() );
+        }
+
+        /*if(perimeter > max_perimeter){
+        	max_perimeter = perimeter;
+        	max_idx = i;
+        }//*/
+      }
+
+      /*Mat hull_img = Mat::zeros(dominant_plane.size(), CV_8UC3);
+    drawContours( dominantHull, hull, max_idx, Scalar(255), -1, 8, vector<Vec4i>(), 0, Point() );
+
+    for (int i = 0 ; i < contours.size() ; i ++){
+    	drawContours( hull_img, hull, i, Scalar(255,0,0), 1, 8, vector<Vec4i>(), 0, Point() );	
+    }
+    
+
+
+    imshow("hull_img",hull_img);//*/
+    //drawing.copyTo(dominant_plane);
+
+
+}
+
 
 void of_driving::fakeBlackSpot(){
 
@@ -792,15 +962,31 @@ void of_driving::computeControlForceOrientation(){
 	Point2f pbar(p_bar(0),p_bar(1));
 	Point2f noFilt_pbar(pbar);
 
-	pbar.x  = low_pass_filter(pbar.x,px_old,Tc,1.0/img_lowpass_freq);
-    pbar.y  = low_pass_filter(pbar.y,py_old,Tc,1.0/img_lowpass_freq);
+	p_bar(0)  = low_pass_filter(pbar.x,px_old,Tc,1.0/bar_lowpass_freq);
+    p_bar(1)  = low_pass_filter(pbar.y,py_old,Tc,1.0/bar_lowpass_freq);
 
-	px_old = pbar.x;
-	py_old = pbar.y;
+	px_old = p_bar(0);
+	py_old = p_bar(1);
 
+	pbar.x = p_bar(0);
+	pbar.y = p_bar(1);
+	
 	Point2f y(0,-1);
 
-	if(norm(pbar) > 0.25){
+
+	geometry_msgs::Point p_msg, nofilt_p_msg;
+	p_msg.x = pbar.x;
+	p_msg.y = pbar.y;
+	p_msg.z = 0;
+
+	nofilt_p_msg.x = noFilt_pbar.x;
+	nofilt_p_msg.y = noFilt_pbar.y;
+	nofilt_p_msg.z = 0.0;
+
+	p_pub.publish(p_msg);
+	nofilt_p_pub.publish(nofilt_p_msg);
+
+	if(norm(pbar) > 0.0/*0.25//*/){
 		theta = pbar.dot(y);
 		theta /= (norm(pbar)*norm(y));
 		theta = acos(theta);
@@ -821,6 +1007,7 @@ void of_driving::computeControlForceOrientation(){
 void of_driving::computeRobotVelocities(double acc, double steer){
 
 	double R = Rm*sin(theta);
+	angular_vel = R ;
 
 	//R = low_pass_filter(R,Rold,Tc,1.0/ctrl_lowpass_freq);
 	//Rold = R;

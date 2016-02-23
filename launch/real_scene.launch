@@ -1,20 +1,22 @@
 <launch> 
 
   <!-- Path of the input video file -->  
-	<arg   name = "filename"        default="$(find of_driving)/video/NAOcamera.avi"   /> 
+	<arg   name = "filename"        default="$(find of_driving)/video/NAOvideo_noCarpet3.avi"   /> 
   
   <!-- Flag establishing if raw images have been taken or not --> 
-  	<arg   name="LOGGED"	        default="false"			                   /> 
+  	<arg   name="LOGGED"	        default="true"			                   /> 
  
  
   <!-- Required images size -->
   	<param name="image_width"       value="320"   type="int"    			   />
   	<param name="image_height"      value="240"   type="int"    			   />
+  <!-- Low-pass frequency ratio -->
+        <param name="fc_ratio"          value="0.25"   type="double"                        />
 
   <!-- FLAGS --> 
   <!-- If multi-threading is enables -->
 	<param name="multithread"       value="true"  type="bool"                          />
-  <!-- Implementation Method for Optical Flow ( 0 = Sparse Lucas-Kanade ; 1 = Dense Farneback ; 2 = GPU Sparse Lucas-Kanade ; 3 = GPU Dense Farneback ; 4 = GPU Dense Brox ) -->
+  <!-- Implementation Method for Optical Flow ( 0 = Sparse Lucas-Kanade ; 1 = Dense Farneback ; 2 = GPU Sparse Lucas-Kanade ; 3 = GPU Dense Lucas-Kanade ; 4 = GPU Dense Farneback ; 5 = GPU Dense Brox ) -->
 	<param name="of_alg"            value="3"     type="int"                           />
   <!-- If working with real images -->  
 	<param name="real"              value="true"  type="bool"                          /> 
@@ -26,29 +28,36 @@
 	<param name="fake_corners"      value="false" type="bool"                          />
 
   <!-- Window size for Optical Flow function -->
-	<param name="windows_size"      value="8"     type="int"                           /> <!-- 8 -->
+	<param name="windows_size"      value="13"     type="int"                           /> <!-- 8 -->
   <!-- number of pyramid levels for Optical Flow function -->
 	<param name="maxLayer"	        value="2"     type="int"                           />
   <!-- number of iterations performed by the Optical Flow function -->
-	<param name="of_iterations"     value="8"     type="int"                           /> <!-- 2 -->
+	<param name="of_iterations"     value="3"     type="int"                           /> <!-- 2 -->
   <!-- Scale factor for the Optical Flow field -->
-	<param name="of_scale"          value="2"     type="int"                           />
+	<param name="of_scale"          value="1"     type="int"                           />
 
   <!-- RANSAC threshold for inliers selection -->
 	<param name="epsilon"           value="0.8"   type="double"                        /> <!-- 1.5 -->
   <!-- RANSAC iterations -->
-	<param name="iteration_num"     value="10"    type="int"                           />
-
+        <param name="iteration_num"     value="10"    type="int"                           />
+  <!-- Image percentage for RANSAC termination -->
+        <param name="RANSAC_imgPercent" value="0.5"   type="double"                        />
+  <!-- Threshold value to make the low-passed dominant plane binary -->
+        <param name="dp_threshold"      value="40"   type="int"                            />
   <!-- Resolution of displayed flows for visualization -->
 	<param name="flowResolution"    value="4"     type="int"                           />
-  <!-- erosion factor for morphological opening/closure of dominant plane image -->
-	<param name="erode_factor"      value="1.0"   type="double"                        /> <!--2.5 -->
-  <!-- dilate factor for morphological opening/closure of dominant plane image -->
-	<param name="dilate_factor"	value="1.0"   type="double"                        /> <!-- 5.0 -->
+  <!-- Morphological opening: erosion factor for morphological opening/closure of dominant plane image -->
+	<param name="open_erode"        value="4.9"   type="double"                        /> <!--2.5 -->
+  <!-- Morphological opening: dilate factor for morphological opening/closure of dominant plane image -->
+	<param name="open_dilate"	value="4.9"   type="double"                        /> <!-- 5.0 -->
+  <!-- Morphological closing: erosion factor for morphological opening/closure of dominant plane image -->
+	<param name="close_erode"      value="4.9"   type="double"                        /> <!--2.5 -->
+  <!-- Morphological closing: dilate factor for morphological opening/closure of dominant plane image -->
+	<param name="close_dilate"	value="4.9"   type="double"                        /> <!-- 5.0 -->
   <!-- scale factor for gradient field computation -->
 	<param name="grad_scale"        value="1.0"   type="double"                        /> <!-- 0.3 -->
   <!-- Maximum commanded angular velocity -->
-	<param name="Rm"                value="1.7"   type="double"                        />  <!-- 0.7 -->
+	<param name="Rm"                value="0.83"   type="double"                        />  <!-- 0.7 -->
 
   <!-- Launch joypad and keyboard nodes -->
 	<node name="joy_node"           pkg="joy"         type="joy_node"                             />
@@ -59,7 +68,7 @@
   <!-- run only if you have already logged raw data from a video camera -->
   <group if="$(arg LOGGED)">
   	<node name="video_publisher_node" pkg="rawVideoPub" type="video_publisher_node" output="screen" args="$(arg filename)"/>  
-	<param name="publishing_rate"   value="30.0"  type="double" />
+	<param name="publishing_rate"   value="	30.0"  type="double" />
   </group>
 
 </launch>

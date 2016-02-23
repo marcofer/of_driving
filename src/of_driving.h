@@ -25,7 +25,7 @@
 #include <std_msgs/Float64.h>
 #include <std_msgs/Float64MultiArray.h>
 #include <geometry_msgs/Twist.h>
-
+#include <geometry_msgs/Point.h>
 #include <boost/math/tools/config.hpp>
 
 #include "parallel_process.h"
@@ -43,6 +43,7 @@ class of_driving{
 	ros::Publisher v_pub, w_pub;
 	ros::Publisher twist_pub;
 	ros::Publisher A_pub, b_pub;
+	ros::Publisher p_pub, nofilt_p_pub;
 
 public:
 	//Constructor
@@ -56,7 +57,8 @@ public:
 
 	//initialization of the sampling time
 	inline void setTc(double T_c) {Tc = T_c;}
-	inline void setLowPassFrequency(double f){img_lowpass_freq = f;}
+	inline void setImgLowPassFrequency(double f){img_lowpass_freq = f;}
+	inline void setBarLowPassFrequency(double f){bar_lowpass_freq = f;}
 
 	inline void set_tilt(double tilt) {camera_tilt = tilt;}
 
@@ -84,7 +86,13 @@ public:
 
 private:
 
+	int area_ths;
+
+	bool open_close;
+
 	Mat H;
+
+	int dp_threshold;
 
 	//Mat ROI_ransac;
 	//Rect rect_ransac;
@@ -93,6 +101,7 @@ private:
 	double ROI_x ;
 	double ROI_y;
 
+	double RANSAC_imgPercent;
 
 
 	//Optical Flow algorithm flag
@@ -120,8 +129,10 @@ private:
 
 	//linear velocity
 	double linear_vel;
+	double angular_vel;
 
 	double img_lowpass_freq;
+	double bar_lowpass_freq;
 
 	//Car control variables
 	double steering;
@@ -139,10 +150,8 @@ private:
 	double grad_scale;
 
 	//erode/dilate scale factor
-	double erode_factor;
-	double dilate_factor;
-	int erode_int;
-	int dilate_int;
+	double open_erode, open_dilate, close_erode, close_dilate;
+	int open_erode_int, open_dilate_int, close_erode_int, close_dilate_int;
 
 	//optical flow field
 	Mat optical_flow, old_flow;
@@ -154,6 +163,9 @@ private:
 	//dominant flow field
 	Mat dominant_plane, best_plane, old_plane;
 	Mat smoothed_plane;
+
+	//Dominant plane convex hull
+	Mat dominantHull;
 
 	//Gradient vector field
 	Mat gradient_field;
@@ -229,7 +241,7 @@ private:
     Mat displayImages(Mat&);
 
     void fakeBlackSpot();
-
+    void computeMaxConvexHull();
 
     void displayImagesWithName(Mat&, string name);
 	
@@ -260,6 +272,7 @@ double high_pass_filter(double in, double in_prev, double out_old, double Tc, do
 void getFlowField(const Mat& u, const Mat& v, Mat& flowField);
 
 
+void callbackButton(int,void*);
 
 
 #endif // DRIVING_H

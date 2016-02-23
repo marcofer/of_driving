@@ -53,17 +53,17 @@ void ParallelDominantPlaneBuild::operator()(const cv::Range& range) const{
         
         //cout << k << ": " << norm(mean(of_rect - pf_rect)) << endl; 
 
-        /*for (int i = 0 ; i < rows ; i ++){
+        for (int i = 0 ; i < rows ; i ++){
             unsigned char* dp_ptr = dp_rect.ptr<uchar>(i);
             unsigned char* op_ptr = op_rect.ptr<uchar>(i);
             for (int j = 0 ; j < cols ; j ++){
-                    dp_ptr[j] = low_pass_filter(dp_ptr[j],op_ptr[j],Tc,1.0/cut_f);
+                    dp_ptr[j] = low_pass_filter(dp_ptr[j],op_ptr[j],Tc,1.0/(cut_f));
             }
         }   
 
         dp_rect.copyTo(op_rect);
 
-        double thresh = 100; //100
+        double thresh = dp_threshold; //100
         double maxVal = 255;
         threshold(dp_rect,dp_rect,thresh,maxVal,THRESH_BINARY);//*/
     }//*/
@@ -182,6 +182,8 @@ void ParallelDisplayImages::operator()(const cv::Range& range) const{
             Mat dp_img;
             cvtColor(dp,dp_img,CV_GRAY2BGR);
             rectangle(dp_img,dpROI.tl(),dpROI.br(),Scalar(0,255,0),4);
+            Point2f p(dp.cols/2,dp.rows - 10);
+            //circle(dp_img,p,3,Scalar(0,0,255),2);
             dp_img.copyTo(total(Rect(2*img.cols,0,img.cols,img.rows)));
         }        
 
@@ -210,23 +212,98 @@ void ParallelDisplayImages::operator()(const cv::Range& range) const{
             Mat cf_img;
             img.copyTo(cf_img);
             Point2f center(img.cols/2,img.rows/2);
+            Point2f bar_center(img.cols/2,img.rows/2);
             Point2f pb(p_bar(0),p_bar(1));
-            Point2f px(pb.x*20.0,0);
+            Point2f px(pb.x,0);
             Point2f y(0,-1);
 
             double pbnorm = norm(px);
-            double pbnorm_max = 50;
-
-            if (pbnorm > pbnorm_max){
+            double dmax = 100.0;
+            double pxmax = 20.0;
+            /*if (pbnorm > pbnorm_max){
                 pbnorm = pbnorm_max;
-                px.x = boost::math::sign(px.x)*50;
-            }
+                px.x = boost::math::sign(px.x)*pbnorm_max;
+            }//*/
 
-            double red = pbnorm/pbnorm_max*255.0 ;
-            double green = 255.0 - red;            
+            px.x = px.x*dmax/pxmax;
+            pb.x = pb.x*dmax/pxmax;
+
+            Point2f tl(center.x - dmax,center.y - 3);
+            Point2f br(center.x + dmax,center.y + 3); 
+            //rectangle(cf_img,tl,br,Scalar(100,100,100),2);
+
+            //bar_length
+            double bar_length = img.cols/2 - 10.0;
+            double bar_height = 10.0;
+
+            //v_bar
+            Point2f v1(1.0/2.0*img.cols,3.0/4.0*img.rows);
+            Point2f v2 = v1 + Point2f(bar_length,bar_height);
+            rectangle(cf_img,v1,v2,Scalar(100,100,100),2);
+
+            //w_bar
+            double angular_vel_max = 0.83;
+            double linear_vel_max = 0.0952;
+            double w_value = angular_vel * (bar_length/2) / angular_vel_max ;
+            double v_value = (linear_vel_max/2)/linear_vel_max*(bar_length/2);
+            
+            double w_red = abs(w_value)/(bar_length/2)*255.0 ;
+            double w_green = 255.0 - w_red;            
+            double v_red = abs(v_value)/(bar_length/2)*255.0 ;
+            double v_green = 255.0 - v_red;            
+
+            Point2f w1(1.0/2.0*img.cols,3.0/4.0*img.rows + 2.0*bar_height);
+            Point2f w2 = w1 + Point2f(bar_length,bar_height);
+            rectangle(cf_img,w1,w2,Scalar(100,100,100),2);
+
+            string text_str;
+            ostringstream convert;
+            Size v_size, vvalue_size, ms_size;
+            Size w_size, wvalue_size, rads_size;
+            double font_scale = 0.9;
+            double font_scale2 = 0.6;
+            text_str = "";
+            text_str = "v = ";
+            v_size = getTextSize(text_str,1,font_scale,1,0);
+            putText(cf_img, text_str,Point(10,v2.y),1,font_scale,Scalar(255,255,255),1,CV_AA);
+           
+            text_str = "";
+            convert << setprecision(4) << linear_vel_max*0.5;
+            text_str = convert.str();
+            vvalue_size = getTextSize(text_str,1,font_scale,1,0);
+            putText(cf_img, text_str,Point(v_size.width + 10,v2.y),1,font_scale,Scalar(255,255,255),1,CV_AA);
+
+            text_str = "";
+            text_str = "[m/s]";
+            ms_size = getTextSize(text_str,1,font_scale2,1,0);
+            putText(cf_img, text_str,Point(img.cols/2-ms_size.width -10,v2.y),1,font_scale2,Scalar(255,255,255),1,CV_AA);
+
+            text_str = "";
+            text_str = "w = ";
+            w_size = getTextSize(text_str,1,font_scale,1,0);
+            putText(cf_img, text_str,Point(10,w2.y),1,font_scale,Scalar(255,255,255),1,CV_AA);
+           
+            text_str = "";
+            convert.str(""); convert.clear();
+            convert << setprecision(4) << angular_vel;
+            text_str = convert.str();
+            wvalue_size = getTextSize(text_str,1,font_scale,1,0);
+            putText(cf_img, text_str,Point(w_size.width + 10,w2.y),1,font_scale,Scalar(255,255,255),1,CV_AA);
+
+            text_str = "";
+            text_str = "[rad/s]";
+            rads_size = getTextSize(text_str,1,font_scale2,1,0);
+            putText(cf_img, text_str,Point(img.cols/2-rads_size.width -10,w2.y),1,font_scale2,Scalar(255,255,255),1,CV_AA);
+
+
+            line(cf_img,Point2f((w1+w2)*0.5),Point2f((w1+w2)*0.5) + Point2f(w_value,0), Scalar(0,w_green,w_red),5.0,2,0);
+            line(cf_img,Point2f((v1+v2)*0.5),Point2f((v1+v2)*0.5) + Point2f(v_value,0), Scalar(0,v_green,v_red),5.0,2,0);
+            circle(cf_img,Point2f((w1+w2)*0.5),3,Scalar(0,0,255),2);
+            circle(cf_img,Point2f((v1+v2)*0.5),3,Scalar(0,0,255),2);
 
             arrowedLine2(cf_img,center,center + y*50,Scalar(255,0,0),3.0,8,0,0.1);
-            arrowedLine2(cf_img,center,center + px,Scalar(0,green,red),3.0,8,0,0.1);
+            arrowedLine2(cf_img,center,center + pb,Scalar(0,255,0),3.0,1,0,0.1);
+            
             cf_img.copyTo(total(Rect(2*img.cols,img.rows,img.cols,img.rows)));//*/
 
         }

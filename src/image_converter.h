@@ -76,6 +76,7 @@ private:
 	//image processing parameters
 	int img_width, img_height;
 
+	double fc_ratio;
 	//Pair of processing images
 	Mat image, prev_image;
 

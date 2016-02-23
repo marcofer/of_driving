@@ -14,6 +14,8 @@ ImageConverter::ImageConverter(): nh_(), it_(nh_){
         ROS_INFO("real %s ", real ? "true" : "false");    
     if(nh_.getParam("NAOimg",NAOimg))
         ROS_INFO("NAOimg %s ", NAOimg ? "true" : "false");    
+	if(nh_.getParam("fc_ratio",fc_ratio))
+		ROS_INFO("fc_ratio set to %f",fc_ratio);
 
     string raw_src_topic;
 
@@ -58,7 +60,7 @@ ImageConverter::ImageConverter(): nh_(), it_(nh_){
 
     gettimeofday(&start_tod,NULL);
     elapsed_tod = 0.0;
-
+    cout << "elapsed_tod: " << elapsed_tod << endl;	
 }
 
 ImageConverter::~ImageConverter(){
@@ -134,7 +136,7 @@ void ImageConverter::rawImageCb(const sensor_msgs::ImageConstPtr& msg){
 		  - (start_tod.tv_sec + (double)start_tod.tv_usec/1000000.0);
 
 	start_tod = end_tod;
-	double cutoff_f = 1.0/elapsed_tod*0.25;
+	double cutoff_f = 1.0/elapsed_tod*fc_ratio;
 
 	std_msgs::Float64 hz_msg;
 	hz_msg.data = 1.0/elapsed_tod;
@@ -145,7 +147,8 @@ void ImageConverter::rawImageCb(const sensor_msgs::ImageConstPtr& msg){
 	//cout << "Tc: " << sampling_time << "---> frequency: " << 1.0/sampling_time << endl;
 	//cout << "cut off f: " << cutoff_f << endl << endl;
 	drive.setTc(elapsed_tod);
-	drive.setLowPassFrequency(cutoff_f);
+	drive.setImgLowPassFrequency(cutoff_f);
+	drive.setBarLowPassFrequency(cutoff_f*fc_ratio*0.5);
 
 	run_algorithm(image,prev_image);
 }
@@ -211,7 +214,8 @@ void ImageConverter::run_algorithm(Mat& img, Mat& prev_img){
 			camera_set = drive.setPanTilt(key,tilt_cmd,pan_cmd);
 			drive.plotPanTiltInfo(info_image,tilt_cmd,pan_cmd);
 			drive.setTc(0.05);
-			drive.setLowPassFrequency(10.0);
+			drive.setImgLowPassFrequency(10.0);
+			drive.setBarLowPassFrequency(10.0);
 			head_tilt = drive.get_tilt();
 			head_pan = drive.get_pan();
 			drive.set_tilt(-head_tilt);

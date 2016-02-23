@@ -27,16 +27,15 @@ class ParallelDominantPlaneBuild : public cv::ParallelLoopBody{
         double epsilon;
         double Tc;
         double cut_f;
-        double dilate_factor;
-        double erode_factor;
-    
+            
     	cv::Matx22f A;
 		cv::Matx21f b;
 
+		int dp_threshold;
 
     public:
-        ParallelDominantPlaneBuild(int ncores, cv::Mat& dpImage, cv::Mat& opImage, cv::Mat ofImage, cv::Mat& pfImage, double eps, double sampling_time, double f, double erode, double dilate, cv::Matx22f A_, cv::Matx21f b_)
-                    : coreNum(ncores), dp(dpImage), op(opImage), of(ofImage), pf(pfImage), epsilon(eps), Tc(sampling_time), cut_f(f), erode_factor(erode), dilate_factor(dilate), A(A_), b(b_){}
+        ParallelDominantPlaneBuild(int ncores, cv::Mat& dpImage, cv::Mat& opImage, cv::Mat ofImage, cv::Mat& pfImage, double eps, double sampling_time, double f, cv::Matx22f A_, cv::Matx21f b_, int ths)
+                    : coreNum(ncores), dp(dpImage), op(opImage), of(ofImage), pf(pfImage), epsilon(eps), Tc(sampling_time), cut_f(f), A(A_), b(b_), dp_threshold(ths){}
 
         virtual void operator()(const cv::Range& range) const;
 };
@@ -105,13 +104,15 @@ class ParallelDisplayImages : public cv::ParallelLoopBody {
 		cv::Mat dp;
 		cv::Mat sp;
 		cv::Mat gf;
+		cv::Mat dh;
 		cv::Matx21f p_bar;
+		double angular_vel;
 		cv::Mat& total;
 		cv::Rect dpROI;
 
 	public:
-		ParallelDisplayImages(int cores, int flow_res, cv::Mat img_,cv::Mat of_,cv::Mat pf_,cv::Mat dp_,cv::Mat sp_,cv::Mat gf_,cv::Matx21f p_bar_,cv::Mat& total_, cv::Rect roi)
-					: coreNum(cores), flowResolution(flow_res), img(img_), of(of_), pf(pf_), dp(dp_), sp(sp_), gf(gf_), p_bar(p_bar_), total(total_), dpROI(roi){}
+		ParallelDisplayImages(int cores, int flow_res, cv::Mat img_,cv::Mat of_,cv::Mat pf_,cv::Mat dp_,cv::Mat sp_, cv::Mat hull, cv::Mat gf_,cv::Matx21f p_bar_,double w,cv::Mat& total_, cv::Rect roi)
+					: coreNum(cores), flowResolution(flow_res), img(img_), of(of_), pf(pf_), dp(dp_), sp(sp_), dh(hull), gf(gf_), p_bar(p_bar_), angular_vel(w), total(total_), dpROI(roi){}
 		virtual void operator()(const cv::Range& range) const;
 
 
